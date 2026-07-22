@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Conectar WhatsApp</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; text-align: center; background-color: #f0f2f5; }
+        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        input, button { padding: 12px; margin: 10px 0; width: 100%; box-sizing: border-box; border-radius: 5px; border: 1px solid #ccc; font-size: 16px; }
+        button { background-color: #25D366; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #1ebe57; }
+        #qrcode { margin-top: 20px; }
+        img { max-width: 100%; border: 10px solid white; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Conectar ao WhatsApp</h2>
+        <p>Insira a senha (AUTHENTICATION_API_KEY) que você criou lá no Render:</p>
+        <input type="password" id="apikey" placeholder="Sua senha secreta do Render" />
+        <button onclick="gerarQrCode()">Gerar QR Code</button>
+        <button onclick="resetarInstancia()" style="background-color: #dc3545; margin-top: 10px;">Resetar Conexão (Começar do Zero)</button>
+        <div id="qrcode"></div>
+    </div>
+
+    <script>
+        const baseUrl = "https://whatsapp-api-drpedro.onrender.com";
+
+        async function gerarQrCode() {
+            const apiKey = document.getElementById('apikey').value;
+            const qrcodeDiv = document.getElementById('qrcode');
+            
+            if (!apiKey) {
+                alert("Por favor, insira a senha!");
+                return;
+            }
+
+            qrcodeDiv.innerHTML = "Gerando... aguarde alguns segundos.";
+
+            try {
+                // 1. Tenta conectar na instância (caso ela já tenha sido criada antes, o que é o seu caso!)
+                let response = await fetch(`${baseUrl}/instance/connect/Padrao`, {
+                    method: "GET",
+                    headers: { "apikey": apiKey }
+                });
+
+                let data = await response.json();
+
+                // 2. Se a instância não existir (erro 404), nós criamos ela
+                if (response.status === 404 || (data.message && data.message.includes("not found"))) {
+                    qrcodeDiv.innerHTML = "Instância não encontrada, criando uma nova...";
+                    response = await fetch(`${baseUrl}/instance/create`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "apikey": apiKey
+                        },
+                        body: JSON.stringify({
+                            "instanceName": "Padrao",
+                            "qrcode": true,
+                            "integration": "WHATSAPP-BAILEYS"
+                        })
+                    });
+                    data = await response.json();
+                } else if (response.status === 401 || response.status === 403) {
+                     // Se der erro 401/403 logo de cara, a senha realmente tá errada pro Render
+                     throw new Error("Senha recusada pelo servidor (Erro " + response.status + "). Verifique a senha no Render.");
+                }
+
+                // 3. Mostra o QR Code ou avisa que já está conectado
+                if (data.base64 || (data.qrcode && data.qrcode.base64)) {
+                    const imgBase64 = data.base64 || data.qrcode.base64;
+                    qrcodeDiv.innerHTML = `<img src="${imgBase64}" alt="QR Code" /><p>Abra o WhatsApp no seu celular, vá em 'Aparelhos Conectados' e leia este QR Code.</p>`;
+                } else if (data.instance?.status === "open" || data.instance?.state === "open") {
+                    qrcodeDiv.innerHTML = "<p style='color: green; font-weight: bold;'>O WhatsApp já está conectado e pronto para uso!</p>";
+                } else {
+                    qrcodeDiv.innerHTML = "Aviso (pode ignorar se o QR code já foi lido): " + JSON.stringify(data);
+                }
+            } catch (error) {
+                qrcodeDiv.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+            }
+        }
+
+        async function resetarInstancia() {
+            const apiKey = document.getElementById('apikey').value;
+            const qrcodeDiv = document.getElementById('qrcode');
+            
+            if (!apiKey) {
+                alert("Por favor, insira a senha antes de resetar!");
+                return;
+            }
+
+            qrcodeDiv.innerHTML = "Limpando conexão antiga... aguarde.";
+
+            try {
+                // Deleta a instância para começarmos do zero
+                await fetch(`${baseUrl}/instance/logout/Padrao`, {
+                    method: "DELETE",
+                    headers: { "apikey": apiKey }
+                });
+                
+                await fetch(`${baseUrl}/instance/delete/Padrao`, {
+                    method: "DELETE",
+                    headers: { "apikey": apiKey }
+                });
+
+                qrcodeDiv.innerHTML = "<p style='color: blue;'>Conexão resetada! Clique em 'Gerar QR Code' novamente para tentar do zero.</p>";
+            } catch (error) {
+                qrcodeDiv.innerHTML = `<p style="color: red;">Erro ao resetar: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

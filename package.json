@@ -1,7 +1,8 @@
 {
-  "name": "temp",
-  "version": "0.1.0",
+  "name": "app-dr-pedro",
+  "version": "1.0.0",
   "private": true,
+  "description": "CRM de follow-up odontológico — DentalFollow",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

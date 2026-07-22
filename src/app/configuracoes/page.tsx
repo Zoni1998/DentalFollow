@@ -1,38 +1,108 @@
 "use client";
 
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { ArrowLeft, Smartphone, QrCode, CheckCircle2, ShieldCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, Smartphone, QrCode, CheckCircle2, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
+import { toast } from "sonner";
 
 export default function Configuracoes() {
   const [connectionState, setConnectionState] = useState<"disconnected" | "generating" | "qrcode" | "connected">("disconnected");
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isMock, setIsMock] = useState(false);
 
-  const handleConnect = () => {
+  // Verifica status ao carregar a página
+  useEffect(() => {
+    checkStatus();
+  }, []);
+
+  const checkStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/whatsapp/qr");
+      const json = await res.json();
+
+      if (json.mock) {
+        setIsMock(true);
+        return; // Mantém disconnected se for mock
+      }
+
+      if (json.connected) {
+        setConnectionState("connected");
+        setPhone(json.phone || null);
+      }
+    } catch (err) {
+      console.error("Erro ao verificar status:", err);
+    }
+  }, []);
+
+  const handleConnect = async () => {
     setConnectionState("generating");
-    
-    // Simula o tempo que a Evolution API leva para gerar a instância e o QR Code
-    setTimeout(() => {
-      setConnectionState("qrcode");
-    }, 2000);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/whatsapp/qr");
+      const json = await res.json();
+
+      if (json.mock) {
+        setIsMock(true);
+        // Simula o fluxo se Z-API não estiver configurada
+        setTimeout(() => {
+          setConnectionState("qrcode");
+          // Gera um QR code simulado
+          setQrCode(null);
+        }, 2000);
+        return;
+      }
+
+      if (json.error) {
+        setError(json.error);
+        setConnectionState("disconnected");
+        toast.error(json.error);
+        return;
+      }
+
+      if (json.connected) {
+        setConnectionState("connected");
+        setPhone(json.phone || null);
+        toast.success("WhatsApp já está conectado!");
+        return;
+      }
+
+      if (json.qrcode) {
+        setQrCode(json.qrcode);
+        setConnectionState("qrcode");
+      } else {
+        setError("Não foi possível obter o QR Code. Verifique sua conta Z-API.");
+        setConnectionState("disconnected");
+      }
+    } catch (err) {
+      setError("Erro de conexão com o servidor");
+      setConnectionState("disconnected");
+      toast.error("Erro de conexão");
+    }
   };
 
-  const handleSimulateScan = () => {
-    // Simula o usuário lendo o QR Code com o celular
-    setConnectionState("connected");
+  const handleRefresh = () => {
+    setConnectionState("generating");
+    handleConnect();
   };
 
   const handleDisconnect = () => {
     setConnectionState("disconnected");
+    setQrCode(null);
+    setPhone(null);
+    toast.info("WhatsApp desconectado");
   };
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-transparent">
       <div className="flex flex-col sm:gap-8 sm:py-8 sm:pl-14 max-w-4xl mx-auto w-full">
         
-        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/40 backdrop-blur-2xl px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
+        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/40 backdrop-blur-2xl backdrop-saturate-150 px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-4">
               <Link 
@@ -56,6 +126,18 @@ export default function Configuracoes() {
             <MotionDiv className="glass-panel p-8 sm:p-12 rounded-3xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[100px] rounded-full -mr-20 -mt-20 pointer-events-none" />
               
+              {isMock && (
+                <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-3 relative z-10">
+                  <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Modo Simulação</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      A Z-API não está configurada. Defina <code className="text-primary">ZAPI_INSTANCE_ID</code> e <code className="text-primary">ZAPI_TOKEN</code> no arquivo .env para usar o WhatsApp real.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col md:flex-row gap-12 items-start relative z-10">
                 <div className="flex-1">
                   <div className="inline-flex items-center justify-center p-3 bg-emerald-500/10 rounded-2xl mb-6">
@@ -74,7 +156,7 @@ export default function Configuracoes() {
                       <ShieldCheck className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                       <div>
                         <h4 className="font-medium text-foreground">Segurança de Ponta a Ponta</h4>
-                        <p className="text-sm text-muted-foreground font-light">Suas mensagens são processadas em ambiente isolado (Evolution API).</p>
+                        <p className="text-sm text-muted-foreground font-light">Suas mensagens são processadas via Z-API em ambiente isolado.</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -109,27 +191,33 @@ export default function Configuracoes() {
                       <Loader2 className="h-12 w-12 text-emerald-500 animate-spin mb-6" />
                       <h3 className="text-lg font-medium text-foreground mb-2">Criando Instância Segura</h3>
                       <p className="text-sm text-muted-foreground font-light">
-                        Comunicando com a Oracle Cloud...
+                        Comunicando com a Z-API...
                       </p>
                     </div>
                   )}
 
                   {connectionState === "qrcode" && (
                     <div className="flex flex-col items-center">
-                      <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl border border-border/50">
-                        {/* Fake QR Code Pattern */}
-                        <div className="w-48 h-48 grid grid-cols-6 grid-rows-6 gap-1 p-2">
-                          {Array.from({ length: 36 }).map((_, i) => (
-                            <div key={i} className={`rounded-sm ${Math.random() > 0.4 ? 'bg-black' : 'bg-transparent'} ${i === 0 || i === 5 || i === 30 ? 'bg-emerald-600 rounded-md scale-125' : ''}`} />
-                          ))}
+                      {qrCode ? (
+                        <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl border border-border/50">
+                          <img src={qrCode} alt="QR Code para WhatsApp" width={192} height={192} className="w-48 h-48" />
                         </div>
-                      </div>
+                      ) : (
+                        <div className="p-4 bg-white rounded-2xl mb-6 shadow-xl border border-border/50">
+                          {/* QR Code simulado */}
+                          <div className="w-48 h-48 grid grid-cols-6 grid-rows-6 gap-1 p-2">
+                            {Array.from({ length: 36 }).map((_, i) => (
+                              <div key={i} className={`rounded-sm ${Math.random() > 0.4 ? 'bg-black' : 'bg-transparent'} ${i === 0 || i === 5 || i === 30 ? 'bg-emerald-600 rounded-md scale-125' : ''}`} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       <h3 className="text-lg font-medium text-foreground mb-2">Leia o QR Code</h3>
-                      <p className="text-sm text-muted-foreground font-light mb-6">
+                      <p className="text-sm text-muted-foreground font-light mb-4">
                         Abra o WhatsApp no seu celular, vá em "Aparelhos Conectados" e aponte a câmera.
                       </p>
-                      <Button onClick={handleSimulateScan} variant="outline" className="w-full h-10 rounded-xl border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10">
-                        [Simular Leitura]
+                      <Button onClick={handleRefresh} variant="outline" className="w-full h-10 rounded-xl border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10">
+                        Atualizar QR Code
                       </Button>
                     </div>
                   )}
@@ -141,7 +229,7 @@ export default function Configuracoes() {
                       </div>
                       <h3 className="text-xl font-medium text-foreground mb-2">Conectado!</h3>
                       <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80 font-medium mb-1">
-                        +55 (11) 98888-7777
+                        {phone || "Número conectado"}
                       </p>
                       <p className="text-xs text-muted-foreground font-light mb-8">
                         Clínica Odontológica Dr. Pedro

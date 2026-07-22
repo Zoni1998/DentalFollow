@@ -12,61 +12,90 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
-import { supabase } from "@/lib/supabase";
 
 export default function NovoFollowup() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Validação de telefone brasileiro
+  const validatePhone = (phone: string): boolean => {
+    const clean = phone.replace(/\D/g, "");
+    return clean.length >= 10 && clean.length <= 13;
+  };
+
+  // Validação de valor monetário
+  const parseAmount = (value: string): number => {
+    if (!value) return 0;
+    // Remove pontos de milhar e troca vírgula decimal por ponto
+    const clean = value.replace(/\./g, "").replace(",", ".");
+    const parsed = parseFloat(clean);
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     const formData = new FormData(e.currentTarget);
-    const name = formData.get("nome") as string;
-    const phone = formData.get("telefone") as string;
-    const treatment = formData.get("tratamento") as string;
-    const value = formData.get("valor") as string;
-    const message = formData.get("mensagem") as string;
+    const name = (formData.get("nome") as string).trim();
+    const phone = (formData.get("telefone") as string).trim();
+    const treatment = (formData.get("tratamento") as string).trim();
+    const value = (formData.get("valor") as string).trim();
+    const message = (formData.get("mensagem") as string).trim();
     const date = formData.get("data") as string;
     const time = formData.get("hora") as string;
 
+    // Validação
+    if (!name || name.length < 3) {
+      toast.error("Nome inválido", { description: "Digite o nome completo do paciente." });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!validatePhone(phone)) {
+      toast.error("Telefone inválido", { description: "Use o formato (11) 99999-9999." });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!treatment || treatment.length < 3) {
+      toast.error("Tratamento inválido", { description: "Descreva o tratamento de interesse." });
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      // 1. Insert patient
-      const { data: patientData, error: patientError } = await supabase
-        .from("patients")
-        .insert([{
+      const amount = parseAmount(value);
+      const scheduled_at = (date && time) 
+        ? new Date(`${date}T${time}:00`).toISOString()
+        : new Date().toISOString();
+
+      const res = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           name,
           phone,
           treatment,
-          value: parseFloat(value.replace(/\./g, "").replace(",", ".")) || 0,
-          status: "Pendente"
-        }])
-        .select()
-        .single();
+          amount,
+          message: message || "",
+          scheduled_at,
+        }),
+      });
 
-      if (patientError) throw patientError;
+      const json = await res.json();
 
-      // 2. Schedule message if provided
-      if (message && date && time && patientData) {
-        // Build ISO timestamp (e.g. 2026-07-12T14:30:00.000Z)
-        const scheduledFor = new Date(`${date}T${time}:00`).toISOString();
-
-        const { error: msgError } = await supabase
-          .from("scheduled_messages")
-          .insert([{
-            patient_id: patientData.id,
-            message_text: message,
-            scheduled_for: scheduledFor,
-            status: "Agendado"
-          }]);
-
-        if (msgError) throw msgError;
+      if (!res.ok) {
+        throw new Error(json.error || "Erro ao salvar");
       }
 
-      toast.success("Paciente cadastrado com sucesso!", {
-        description: "O orçamento foi registrado e o follow-up agendado."
-      });
+      if (json.warning) {
+        toast.success("Paciente cadastrado!", { description: json.warning });
+      } else {
+        toast.success("Paciente cadastrado com sucesso!", {
+          description: "O orçamento foi registrado e o follow-up agendado."
+        });
+      }
       
       router.push("/");
     } catch (error: any) {
@@ -83,7 +112,7 @@ export default function NovoFollowup() {
     <div className="flex min-h-screen w-full flex-col bg-transparent">
       <div className="flex flex-col sm:gap-8 sm:py-8 sm:pl-14 max-w-3xl mx-auto w-full">
         
-        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/40 backdrop-blur-2xl px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
+        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/40 backdrop-blur-2xl backdrop-saturate-150 px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-4">
               <Link 
@@ -121,6 +150,7 @@ export default function NovoFollowup() {
                     type="text" 
                     placeholder="Ex: João da Silva" 
                     required
+                    minLength={3}
                     className="h-12 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl"
                   />
                 </div>
@@ -147,6 +177,7 @@ export default function NovoFollowup() {
                     type="text" 
                     placeholder="Ex: Implante, Lente de Contato" 
                     required
+                    minLength={3}
                     className="h-12 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl"
                   />
                 </div>
@@ -157,6 +188,7 @@ export default function NovoFollowup() {
                     id="valor"
                     name="valor"
                     type="text" 
+                    inputMode="decimal"
                     placeholder="0,00" 
                     className="h-12 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl"
                   />

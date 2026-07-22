@@ -1,91 +1,169 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, MessageCircle, CheckCircle2, Phone, Calendar, Clock, ShieldCheck, XCircle, Pencil, Save, X } from "lucide-react";
+import { ArrowLeft, MessageCircle, CheckCircle2, Phone, Calendar, Clock, ShieldCheck, XCircle, Pencil, Save, X, Loader2 } from "lucide-react";
 import { ToothIcon } from "@/components/ui/tooth-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
-import { useState, use } from "react";
+import { useState, useEffect, useCallback, use } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { formatCurrency, formatDate, formatTime, getStatusBadgeClass } from "@/lib/format";
 
-// Mock data
-const mockPatients: Record<string, any> = {
-  "1": {
-    id: 1,
-    initials: "JS",
-    initialsBg: "bg-foreground/5 border border-foreground/10",
-    initialsColor: "text-foreground",
-    name: "João Silva",
-    treatment: "Implante Dentário",
-    phone: "(11) 98765-4321",
-    value: "R$ 3.500,00",
-    date: "12/07/2026",
-    time: "14:30",
-    status: "Pendente",
-    badgeBg: "bg-amber-500/10 text-amber-500 border-amber-500/20",
-    message: "Olá João! Aqui é o Dr. Pedro. Estava revendo seu caso e notei que ficou pendente agendarmos o início do seu tratamento de Implante. Podemos fechar para essa semana? Consigo uma condição especial se iniciarmos agora."
-  },
-  "2": {
-    id: 2,
-    initials: "MO",
-    initialsBg: "bg-foreground/5 border border-foreground/10",
-    initialsColor: "text-foreground",
-    name: "Maria Oliveira",
-    treatment: "Lente de Contato",
-    phone: "(11) 99988-7766",
-    value: "R$ 8.000,00",
-    date: "11/07/2026",
-    time: "09:00",
-    status: "Enviado",
-    badgeBg: "bg-primary/10 text-primary border-primary/20",
-    message: "Oi Maria, tudo bem? O planejamento das suas lentes já está pronto! Mandei as simulações no seu email, conseguiu dar uma olhadinha? Me avise quando quiser vir aprovar o formato."
-  }
-};
+interface FollowupDetail {
+  id: string;
+  treatment: string;
+  amount: number;
+  message: string;
+  scheduled_at: string;
+  status: string;
+  lost_reason: string | null;
+  patients: { id: string; name: string; phone: string } | null;
+}
 
 export default function FichaPaciente({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const initialPatient = mockPatients[resolvedParams.id] || mockPatients["1"];
-  const [patient, setPatient] = useState(initialPatient);
+  const [fup, setFup] = useState<FollowupDetail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [editData, setEditData] = useState<FollowupDetail | null>(null);
+
+  const fetchFup = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/followups/${resolvedParams.id}`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      const json = await res.json();
+      setFup(json.followup);
+      setEditData(json.followup);
+    } catch (err) {
+      console.error("Erro ao carregar ficha:", err);
+      toast.error("Erro ao carregar dados do paciente");
+    } finally {
+      setLoading(false);
+    }
+  }, [resolvedParams.id]);
+
+  useEffect(() => {
+    fetchFup();
+  }, [fetchFup]);
 
   const handleSave = async () => {
+    if (!editData) return;
     try {
-      // Tenta atualizar no Supabase. Se falhar por falta de config, apenas simula.
-      if (patient.id !== 1 && patient.id !== 2) {
-        // IDs 1 e 2 são mocks locais
-        const { error: updateError } = await supabase
-          .from("patients")
-          .update({
-            name: patient.name,
-            phone: patient.phone,
-            treatment: patient.treatment,
-            value: parseFloat(patient.value.replace(/\./g, "").replace(",", ".")) || 0,
-          })
-          .eq("id", patient.id);
+      const res = await fetch("/api/patients", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          followup_id: editData.id,
+          patient_name: editData.patients?.name,
+          patient_phone: editData.patients?.phone,
+          treatment: editData.treatment,
+          amount: editData.amount,
+          message: editData.message,
+          scheduled_at: editData.scheduled_at,
+          status: editData.status,
+          lost_reason: editData.lost_reason,
+        }),
+      });
 
-        if (updateError) {
-          console.warn("Supabase update error:", updateError);
-        }
-      }
-      setIsEditing(false);
+      if (!res.ok) throw new Error("Falha ao salvar");
+
       toast.success("Informações do paciente atualizadas!");
-    } catch (error) {
       setIsEditing(false);
-      toast.success("Informações salvas (Mock)!");
+      setFup(editData);
+    } catch (err) {
+      toast.error("Erro ao salvar alterações");
+      console.error(err);
     }
   };
+
+  const handleSendWhatsApp = async () => {
+    if (!fup) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ followup_id: fup.id }),
+      });
+      const json = await res.json();
+
+      if (res.ok && json.success) {
+        toast.success("Mensagem enviada via WhatsApp! 📱");
+        // Atualiza status localmente
+        setFup((prev) => prev ? { ...prev, status: "Enviado" } : prev);
+      } else if (json.mock) {
+        toast.info("Z-API não configurada — modo simulação ativo");
+      } else {
+        toast.error("Erro ao enviar: " + (json.error || "desconhecido"));
+      }
+    } catch (err) {
+      toast.error("Erro ao enviar mensagem");
+      console.error(err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string, lostReason?: string) => {
+    if (!fup) return;
+    try {
+      const res = await fetch("/api/patients", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          followup_id: fup.id,
+          status: newStatus,
+          lost_reason: lostReason || null,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Falha ao atualizar");
+
+      toast.success(
+        newStatus === "Fechado" ? "Paciente marcado como Fechado! 🎉" :
+        newStatus === "Perdido" ? "Marcado como Perdido." :
+        "Status atualizado!"
+      );
+
+      setFup((prev) => prev ? { ...prev, status: newStatus, lost_reason: lostReason || null } : prev);
+    } catch (err) {
+      toast.error("Erro ao atualizar status");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!fup) {
+    return (
+      <div className="flex min-h-screen items-center justify-center flex-col gap-4">
+        <p className="text-muted-foreground">Paciente não encontrado.</p>
+        <Link href="/followup/lista" className={cn(buttonVariants({ variant: "outline" }), "rounded-full")}>
+          Voltar para a lista
+        </Link>
+      </div>
+    );
+  }
+
+  const patient = fup.patients;
+  const displayData = isEditing ? editData! : fup;
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-transparent">
       <div className="flex flex-col sm:gap-8 sm:py-8 sm:pl-14 max-w-5xl mx-auto w-full">
         
-        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/40 backdrop-blur-2xl px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
+        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/40 backdrop-blur-2xl backdrop-saturate-150 px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-4">
               <Link 
@@ -102,7 +180,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
             <div className="flex items-center gap-3">
               {isEditing ? (
                 <>
-                  <Button variant="ghost" size="icon" onClick={() => { setPatient(initialPatient); setIsEditing(false); }} className="rounded-full">
+                  <Button variant="ghost" size="icon" onClick={() => { setEditData(fup); setIsEditing(false); }} className="rounded-full">
                     <X className="h-4 w-4" />
                   </Button>
                   <Button onClick={handleSave} className="rounded-full gap-2 shadow-[0_0_15px_rgba(139,92,246,0.3)] bg-primary text-primary-foreground hover:bg-primary/90">
@@ -129,24 +207,40 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full -mr-20 -mt-20 pointer-events-none" />
             
             <div className="flex flex-col items-center gap-4">
-              <div className={`h-28 w-28 rounded-full flex items-center justify-center font-medium text-4xl shadow-[0_0_20px_rgba(255,255,255,0.05)] ring-4 ring-foreground/5 ${patient.initialsBg} ${patient.initialsColor}`}>
-                {patient.initials}
+              <div className={cn("h-28 w-28 rounded-full flex items-center justify-center font-medium text-4xl shadow-[0_0_20px_rgba(255,255,255,0.05)] ring-4 ring-foreground/5 bg-foreground/5 border border-foreground/10 text-foreground")}>
+                {patient?.name?.charAt(0)?.toUpperCase() || "?"}
               </div>
-              <Badge variant="outline" className={`mt-1 py-1.5 px-4 font-normal ${patient.badgeBg}`}>
-                {patient.status}
-              </Badge>
+              {isEditing ? (
+                <select 
+                  value={editData!.status} 
+                  onChange={e => {
+                    const newStatus = e.target.value;
+                    setEditData(prev => prev ? { ...prev, status: newStatus, lost_reason: newStatus !== 'Perdido' ? null : prev.lost_reason } : prev);
+                  }}
+                  className={cn("mt-1 py-1.5 px-4 rounded-full text-sm outline-none border focus:ring-2 focus:ring-primary bg-background", getStatusBadgeClass(new Date().toISOString() ? editData!.status : "Pendente"))}
+                >
+                  <option className="bg-background text-foreground" value="Pendente">Pendente</option>
+                  <option className="bg-background text-foreground" value="Enviado">Enviado</option>
+                  <option className="bg-background text-foreground" value="Fechado">Fechado</option>
+                  <option className="bg-background text-foreground" value="Perdido">Perdido</option>
+                </select>
+              ) : (
+                <Badge variant="outline" className={cn("mt-1 py-1.5 px-4 font-normal", getStatusBadgeClass(displayData.status))}>
+                  {displayData.status}
+                </Badge>
+              )}
             </div>
 
             <div className="flex-1 grid gap-8 relative z-10 w-full mt-2">
               <div>
                 {isEditing ? (
                   <Input 
-                    value={patient.name} 
-                    onChange={e => setPatient({...patient, name: e.target.value})}
+                    value={editData?.patients?.name || ""}
+                    onChange={e => setEditData(prev => prev ? { ...prev, patients: { ...prev.patients!, name: e.target.value } } : prev)}
                     className="text-4xl font-light h-14 bg-foreground/5 border-border focus-visible:ring-primary w-full max-w-sm"
                   />
                 ) : (
-                  <h2 className="text-4xl font-light tracking-tight text-foreground">{patient.name}</h2>
+                  <h2 className="text-4xl font-light tracking-tight text-foreground">{patient?.name}</h2>
                 )}
                 
                 <div className="flex flex-wrap items-center gap-4 mt-4">
@@ -154,24 +248,24 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                     <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
                     {isEditing ? (
                       <input 
-                        value={patient.phone} 
-                        onChange={e => setPatient({...patient, phone: e.target.value})}
+                        value={editData?.patients?.phone || ""}
+                        onChange={e => setEditData(prev => prev ? { ...prev, patients: { ...prev.patients!, phone: e.target.value } } : prev)}
                         className="bg-transparent border-none outline-none w-full text-foreground/80 placeholder:text-muted-foreground"
                       />
                     ) : (
-                      patient.phone
+                      patient?.phone
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-foreground/80 bg-foreground/5 border border-border px-4 py-1.5 rounded-full text-sm min-w-40">
                     <ToothIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                     {isEditing ? (
                       <input 
-                        value={patient.treatment} 
-                        onChange={e => setPatient({...patient, treatment: e.target.value})}
+                        value={editData?.treatment || ""}
+                        onChange={e => setEditData(prev => prev ? { ...prev, treatment: e.target.value } : prev)}
                         className="bg-transparent border-none outline-none w-full text-foreground/80 placeholder:text-muted-foreground"
                       />
                     ) : (
-                      patient.treatment
+                      displayData.treatment
                     )}
                   </div>
                 </div>
@@ -182,12 +276,12 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   <span className="text-sm font-light text-muted-foreground block mb-1">Valor na Mesa</span>
                   {isEditing ? (
                     <Input 
-                      value={patient.value} 
-                      onChange={e => setPatient({...patient, value: e.target.value})}
+                      value={editData?.amount?.toString() || "0"}
+                      onChange={e => setEditData(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : prev)}
                       className="text-2xl font-light h-12 bg-foreground/5 border-border focus-visible:ring-primary w-full max-w-40"
                     />
                   ) : (
-                    <span className="text-3xl font-light text-foreground">{patient.value}</span>
+                    <span className="text-3xl font-light text-foreground">{formatCurrency(displayData.amount)}</span>
                   )}
                 </div>
                 <div>
@@ -195,31 +289,44 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   <div className="flex items-center gap-4 text-foreground font-medium">
                     <div className="flex items-center gap-2 bg-foreground/5 border border-border rounded-lg px-3 py-1.5">
                       <Calendar className="h-4 w-4 text-primary shrink-0" /> 
-                      {isEditing ? (
-                        <input 
-                          value={patient.date} 
-                          onChange={e => setPatient({...patient, date: e.target.value})}
-                          className="font-light bg-transparent border-none outline-none w-24 text-foreground"
-                        />
-                      ) : (
-                        <span className="font-light">{patient.date}</span>
-                      )}
+                      <span className="font-light">{formatDate(displayData.scheduled_at)}</span>
                     </div>
                     <div className="flex items-center gap-2 bg-foreground/5 border border-border rounded-lg px-3 py-1.5">
                       <Clock className="h-4 w-4 text-primary shrink-0" /> 
-                      {isEditing ? (
-                        <input 
-                          value={patient.time} 
-                          onChange={e => setPatient({...patient, time: e.target.value})}
-                          className="font-light bg-transparent border-none outline-none w-16 text-foreground"
-                        />
-                      ) : (
-                        <span className="font-light">{patient.time}</span>
-                      )}
+                      <span className="font-light">{formatTime(displayData.scheduled_at)}</span>
                     </div>
                   </div>
                 </div>
               </div>
+              
+              {displayData.status === 'Perdido' && (
+                <MotionDiv 
+                  initial={{ opacity: 0, height: 0 }} 
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="pt-6 border-t border-destructive/20"
+                >
+                  <span className="text-sm font-medium text-destructive block mb-2 flex items-center gap-2">
+                    <XCircle className="h-4 w-4" /> Motivo da Perda
+                  </span>
+                  {isEditing ? (
+                    <select 
+                      value={editData?.lost_reason || ""} 
+                      onChange={e => setEditData(prev => prev ? { ...prev, lost_reason: e.target.value } : prev)}
+                      className="bg-foreground/5 border border-border text-foreground text-sm rounded-lg outline-none focus:ring-2 focus:ring-destructive w-full max-w-sm p-2.5"
+                    >
+                      <option className="bg-background text-foreground" value="" disabled>Selecione um motivo...</option>
+                      <option className="bg-background text-foreground" value="Preço muito alto">Preço muito alto</option>
+                      <option className="bg-background text-foreground" value="Fechou com concorrente">Fechou com concorrente</option>
+                      <option className="bg-background text-foreground" value="Sumiu (Ghosting)">Sumiu (Ghosting)</option>
+                      <option className="bg-background text-foreground" value="Decidiu adiar">Decidiu adiar o tratamento</option>
+                      <option className="bg-background text-foreground" value="Outro">Outro motivo</option>
+                    </select>
+                  ) : (
+                    <span className="text-foreground/80 font-light">{displayData.lost_reason || "Motivo não informado"}</span>
+                  )}
+                </MotionDiv>
+              )}
+
             </div>
           </MotionDiv>
 
@@ -238,28 +345,32 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
               <div className="glass-panel p-6 rounded-2xl rounded-tl-sm text-foreground/80 font-light leading-relaxed relative">
                 {isEditing ? (
                   <Textarea 
-                    value={patient.message} 
-                    onChange={e => setPatient({...patient, message: e.target.value})}
+                    value={editData?.message || ""}
+                    onChange={e => setEditData(prev => prev ? { ...prev, message: e.target.value } : prev)}
                     className="min-h-[150px] bg-foreground/5 border-border text-foreground font-light resize-none focus-visible:ring-primary p-4"
                   />
                 ) : (
                   <>
-                    {patient.message}
-                    <div className="absolute right-4 bottom-3 text-[10px] text-muted-foreground/80 font-medium">09:41</div>
+                    {displayData.message || "Nenhuma mensagem cadastrada."}
+                    <div className="absolute right-4 bottom-3 text-[10px] text-muted-foreground/80 font-medium">{formatTime(displayData.scheduled_at)}</div>
                   </>
                 )}
               </div>
 
               <div className="mt-10">
                 <Button 
-                  disabled={isEditing}
+                  disabled={isEditing || sending}
+                  onClick={handleSendWhatsApp}
                   className="w-full sm:w-auto h-14 rounded-full px-8 shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] transition-all gap-3 text-base font-medium bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:shadow-none"
                 >
-                  <MessageCircle className="h-5 w-5" />
-                  Enviar WhatsApp Agora
+                  {sending ? (
+                    <><Loader2 className="h-5 w-5 animate-spin" /> Enviando...</>
+                  ) : (
+                    <><MessageCircle className="h-5 w-5" /> Enviar WhatsApp Agora</>
+                  )}
                 </Button>
                 <p className="text-xs text-muted-foreground/80 mt-4 font-light text-center sm:text-left">
-                  {isEditing ? "Salve as alterações para habilitar o envio." : "Isso abrirá o WhatsApp Web / App com a mensagem preenchida."}
+                  {isEditing ? "Salve as alterações para habilitar o envio." : "Envia a mensagem via Z-API diretamente para o WhatsApp do paciente."}
                 </p>
               </div>
             </MotionDiv>
@@ -268,12 +379,20 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
               <MotionDiv className="glass-panel rounded-3xl p-8 flex flex-col gap-4">
                 <h3 className="font-light text-muted-foreground mb-2">Atualizar Status</h3>
                 
-                <Button variant="outline" className="w-full justify-start h-12 rounded-xl border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 transition-colors">
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleStatusChange("Fechado")}
+                  className="w-full justify-start h-12 rounded-xl border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 transition-colors"
+                >
                   <CheckCircle2 className="mr-3 h-5 w-5" />
                   Marcar como Fechado
                 </Button>
                 
-                <Button variant="outline" className="w-full justify-start h-12 rounded-xl border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/30 text-red-600 dark:text-red-400 transition-colors">
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleStatusChange("Perdido", "Motivo não informado")}
+                  className="w-full justify-start h-12 rounded-xl border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/30 text-red-600 dark:text-red-400 transition-colors"
+                >
                   <XCircle className="mr-3 h-5 w-5" />
                   Marcar como Perdido
                 </Button>

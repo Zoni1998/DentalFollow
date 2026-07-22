@@ -3,7 +3,7 @@
 import { motion, HTMLMotionProps } from "framer-motion";
 import React from "react";
 
-export const fadeIn = {
+export const fadeIn: import("framer-motion").Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: { 
     opacity: 1, 

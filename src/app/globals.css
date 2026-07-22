@@ -42,7 +42,7 @@
   --foreground: oklch(0.14 0.05 270); /* Dark slate */
   
   /* Glassmorphism surfaces for light mode */
-  --card: oklch(1 0 0 / 0.6); /* Translucent white */
+  --card: oklch(1 0 0 / 0.45); /* More translucent white for stronger glass effect */
   --card-foreground: oklch(0.14 0.05 270);
   
   --popover: oklch(0.98 0.01 270 / 0.8);
@@ -121,14 +121,14 @@
 /* Glass panel utility */
 @layer utilities {
   .glass-panel {
-    @apply bg-card backdrop-blur-xl border border-border shadow-[0_4px_30px_rgba(0,0,0,0.05)];
+    @apply bg-white/[0.65] backdrop-blur-2xl backdrop-saturate-[1.2] border border-white/40 shadow-[0_8px_32px_0_rgba(31,38,135,0.07),inset_1px_1px_2px_rgba(255,255,255,0.8),inset_-1px_-1px_1px_rgba(0,0,0,0.02)];
   }
   .dark .glass-panel {
-    @apply shadow-[0_4px_30px_rgba(0,0,0,0.1)];
+    @apply bg-white/[0.03] border-white/[0.1] shadow-[0_8px_32px_0_rgba(0,0,0,0.4),inset_1px_1px_2px_rgba(255,255,255,0.15),inset_-1px_-1px_1px_rgba(255,255,255,0.02)];
   }
   
   .glass-panel-hover {
-    @apply hover:bg-foreground/[0.04] hover:border-foreground/[0.15] transition-all duration-300;
+    @apply transition-all duration-500 ease-out hover:scale-[0.98] hover:backdrop-blur-3xl hover:bg-gradient-to-r hover:from-transparent hover:to-foreground/[0.08] hover:border-foreground/[0.15] hover:shadow-[0_2px_15px_rgba(0,0,0,0.05)];
   }
   
   /* Helper to make images/icons adapt automatically */
