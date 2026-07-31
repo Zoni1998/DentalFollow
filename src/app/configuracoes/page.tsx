@@ -132,7 +132,7 @@ export default function Configuracoes() {
                   <div>
                     <p className="text-sm font-medium text-foreground">Modo Simulação</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      A Z-API não está configurada. Defina <code className="text-primary">ZAPI_INSTANCE_ID</code> e <code className="text-primary">ZAPI_TOKEN</code> no arquivo .env para usar o WhatsApp real.
+                      A API de WhatsApp não está configurada. Defina <code className="text-primary">EVOLUTION_API_URL</code> e <code className="text-primary">EVOLUTION_API_KEY</code> no arquivo .env para usar o envio real.
                     </p>
                   </div>
                 </div>
