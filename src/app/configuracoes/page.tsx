@@ -76,7 +76,8 @@ export default function Configuracoes() {
         setQrCode(json.qrcode);
         setConnectionState("qrcode");
       } else {
-        setError("Não foi possível obter o QR Code. Verifique sua conta Z-API.");
+        // Se a instância foi recém-criada mas ainda não tem QR Code pronto, ou erro interno
+        setError("Não foi possível obter o QR Code. Tente novamente em alguns segundos.");
         setConnectionState("disconnected");
       }
     } catch (err) {
@@ -156,7 +157,7 @@ export default function Configuracoes() {
                       <ShieldCheck className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                       <div>
                         <h4 className="font-medium text-foreground">Segurança de Ponta a Ponta</h4>
-                        <p className="text-sm text-muted-foreground font-light">Suas mensagens são processadas via Z-API em ambiente isolado.</p>
+                        <p className="text-sm text-muted-foreground font-light">Suas mensagens são processadas via Evolution API em ambiente isolado.</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -191,7 +192,7 @@ export default function Configuracoes() {
                       <Loader2 className="h-12 w-12 text-emerald-500 animate-spin mb-6" />
                       <h3 className="text-lg font-medium text-foreground mb-2">Criando Instância Segura</h3>
                       <p className="text-sm text-muted-foreground font-light">
-                        Comunicando com a Z-API...
+                        Comunicando com a Evolution API...
                       </p>
                     </div>
                   )}

@@ -98,7 +98,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
         // Atualiza status localmente
         setFup((prev) => prev ? { ...prev, status: "Enviado" } : prev);
       } else if (json.mock) {
-        toast.info("Z-API não configurada — modo simulação ativo");
+        toast.info("Evolution API não configurada — modo simulação ativo");
       } else {
         toast.error("Erro ao enviar: " + (json.error || "desconhecido"));
       }
@@ -337,7 +337,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
                   <MessageCircle className="h-5 w-5 text-primary" />
-                  <h3 className="text-xl font-light tracking-tight text-foreground">Mensagem de Quebra-gelo</h3>
+                  <h3 className="text-xl font-light tracking-tight text-foreground">Mensagem Inicial</h3>
                 </div>
               </div>
               
@@ -370,7 +370,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground/80 mt-4 font-light text-center sm:text-left">
-                  {isEditing ? "Salve as alterações para habilitar o envio." : "Envia a mensagem via Z-API diretamente para o WhatsApp do paciente."}
+                  {isEditing ? "Salve as alterações para habilitar o envio." : "Envia a mensagem via Evolution API diretamente para o WhatsApp do paciente."}
                 </p>
               </div>
             </MotionDiv>

@@ -196,7 +196,7 @@ export default function NovoFollowup() {
               </MotionDiv>
 
               <MotionDiv className="grid gap-3">
-                <Label htmlFor="mensagem" className="text-sm font-medium text-foreground/80">Mensagem de Quebra-gelo (Opcional)</Label>
+                <Label htmlFor="mensagem" className="text-sm font-medium text-foreground/80">Mensagem Inicial (Opcional)</Label>
                 <Textarea 
                   id="mensagem"
                   name="mensagem"
