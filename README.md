@@ -1,6 +1,6 @@
-# 🦷 AppDrPedro — DentalFollow CRM
+# 🦷 DentalFollow CRM
 
-CRM de follow-up odontológico focado em conversão de orçamentos. Ajuda o Dr. Pedro a gerenciar pacientes, agendar mensagens de WhatsApp automáticas e acompanhar métricas de conversão.
+SaaS de CRM de follow-up odontológico focado em conversão de orçamentos. Ajuda as clínicas a gerenciarem pacientes, agendarem mensagens automáticas pelo WhatsApp e acompanharem métricas de conversão.
 
 ## Stack
 
@@ -10,15 +10,15 @@ CRM de follow-up odontológico focado em conversão de orçamentos. Ajuda o Dr. 
 | UI | React 19 + shadcn/ui + Tailwind CSS v4 |
 | Animações | Framer Motion |
 | Banco de dados | Supabase (PostgreSQL) |
-| Mensagens | Z-API (WhatsApp API) |
-| Agendamento | Upstash QStash |
+| Mensagens | Evolution API (WhatsApp API Integrada) |
+| Agendamento | cron-job.org / Upstash QStash |
 
 ## Pré-requisitos
 
 - Node.js 20+
 - Conta no Supabase
-- (Opcional) Conta na Z-API para envio de WhatsApp real
-- (Opcional) Conta Upstash para QStash
+- Servidor rodando a Evolution API (Ex: Render, VPS)
+- (Opcional) Conta Upstash para QStash ou cron-job.org para cron-trigger
 
 ## Configuração
 
@@ -28,7 +28,7 @@ npm install
 
 # Copiar variáveis de ambiente
 cp .env.example .env.local
-# Edite .env.local com suas credenciais (Supabase, Z-API, QStash)
+# Edite .env.local com suas credenciais (Supabase, Evolution API)
 ```
 
 ### Variáveis obrigatórias
@@ -37,32 +37,17 @@ cp .env.example .env.local
 |----------|-----------|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key do Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role (server-only) |
-
-### Variáveis opcionais
-
-| Variável | Descrição | Padrão |
-|----------|-----------|--------|
-| `ZAPI_INSTANCE_ID` | ID da instância Z-API | Mock mode |
-| `ZAPI_TOKEN` | Token da Z-API | Mock mode |
-| `QSTASH_CURRENT_SIGNING_KEY` | Chave de assinatura QStash | Sem verificação |
+| `SUPABASE_SECRET_KEY` | Service role / chaves secretas do supabase |
+| `EVOLUTION_API_URL` | URL da instância hospedada da Evolution API |
+| `EVOLUTION_API_KEY` | Global API Key da Evolution API |
+| `EVOLUTION_INSTANCE_NAME` | Nome da instância do WhatsApp |
 
 ## Banco de Dados
 
-O schema consiste em duas tabelas:
+O schema consiste em duas tabelas base (dentro do schema evolution ou public dependendo da instalação):
 
 - **patients** — dados pessoais (nome, telefone)
 - **followups** — tratamentos, valores, mensagens agendadas, status e métricas de perda
-
-Execute as migrations na ordem para criar o schema:
-
-```bash
-# Via Supabase CLI
-supabase db push
-
-# Ou manualmente via SQL editor no dashboard do Supabase
-# Arquivos em supabase/migrations/
-```
 
 ### Status de Follow-up
 
@@ -89,40 +74,19 @@ npm run build
 npm start
 ```
 
-### Integração com QStash
+### Automação de Agendamentos (Cron)
 
-1. Faça deploy da aplicação (precisa de URL pública)
-2. Configure o QStash para chamar `POST https://seu-dominio.com/api/webhooks/qstash`
-3. Defina a frequência desejada (ex: a cada 1 minuto)
+O envio das mensagens programadas é feito de forma autônoma via Webhook (QStash ou cron-job.org) chamando sua Vercel:
 
-## Estrutura do Projeto
-
-```
-src/
-├── app/
-│   ├── api/               # API Routes (server-side)
-│   │   ├── patients/       # CRUD de pacientes/followups
-│   │   ├── followups/      # Listagem e busca por ID
-│   │   ├── dashboard/      # Dados agregados pro dashboard
-│   │   ├── whatsapp/       # Envio + QR code Z-API
-│   │   └── webhooks/qstash/ # Processamento de mensagens agendadas
-│   ├── configuracoes/      # Conexão WhatsApp
-│   ├── conversao/          # Métricas de conversão
-│   ├── followup/           # Cadastro, lista e ficha do paciente
-│   ├── hoje/               # Follow-ups do dia
-│   └── orcamentos/          # Pipeline de orçamentos
-├── components/              # Componentes UI (shadcn + motion)
-├── lib/                     # Utilitários (formatação, Supabase, Z-API)
-└── supabase/
-    └── migrations/          # Migrations do banco de dados
-```
+1. Faça deploy da aplicação na Vercel (precisa de URL pública)
+2. Configure um Job externo apontando um request `POST` para `https://seu-dominio.com/api/webhooks/qstash`
+3. Defina a frequência de execução em `1 minuto`
 
 ## Tecnologias
 
 - [Next.js](https://nextjs.org)
 - [Supabase](https://supabase.com)
 - [shadcn/ui](https://ui.shadcn.com)
-- [Z-API](https://z-api.io)
-- [Upstash QStash](https://upstash.com/qstash)
+- [Evolution API](https://evolution-api.com)
 - [Tailwind CSS](https://tailwindcss.com)
 - [Framer Motion](https://www.framer.com/motion/)
