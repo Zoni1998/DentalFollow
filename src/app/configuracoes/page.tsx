@@ -233,7 +233,7 @@ export default function Configuracoes() {
                         {phone || "Número conectado"}
                       </p>
                       <p className="text-xs text-muted-foreground font-light mb-8">
-                        Clínica Odontológica Dr. Pedro
+                        Minha Clínica
                       </p>
                       <Button onClick={handleDisconnect} variant="outline" className="w-full h-10 rounded-xl border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-600">
                         Desconectar Aparelho

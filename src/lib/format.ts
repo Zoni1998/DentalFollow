@@ -1,5 +1,5 @@
 /**
- * Funções utilitárias para formatação de dados do AppDrPedro.
+ * Funções utilitárias para formatação de dados do DentalFollow.
  */
 
 /**

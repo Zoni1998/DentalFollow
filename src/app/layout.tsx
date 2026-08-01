@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AppDrPedro - CRM",
+  title: "DentalFollow - CRM",
   description: "CRM de Follow-up Odontológico",
 };
 
