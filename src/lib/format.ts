@@ -110,3 +110,17 @@ export function isToday(isoDate: string): boolean {
     date.getFullYear() === now.getFullYear()
   );
 }
+
+/**
+ * Sanitiza o número de telefone para o formato padrão do WhatsApp.
+ * Remove todos os caracteres não numéricos.
+ * Se o número não começar com 55 (Brasil), adiciona o prefixo 55.
+ */
+export function sanitizePhone(phone: string): string {
+  if (!phone) return "";
+  let digits = phone.replace(/\D/g, "");
+  if (digits.length >= 10 && !digits.startsWith("55")) {
+    digits = "55" + digits;
+  }
+  return digits;
+}

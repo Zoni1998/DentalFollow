@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { sendWhatsAppMessage } from "@/lib/zapi";
+import { sendWhatsAppMessage } from "@/lib/evolution";
 import crypto from "crypto";
 
 /**
@@ -58,22 +58,27 @@ export async function POST(req: Request) {
   try {
     const bodyText = await req.text();
 
-    // 1. Validar assinatura do QStash
+    // 1. Validar segurança (QStash Signature ou CRON_SECRET)
     const signingKey = process.env.QSTASH_CURRENT_SIGNING_KEY || "";
-    const signature =
-      req.headers.get("Upstash-Signature") ||
-      req.headers.get("Authorization");
+    const cronSecret = process.env.CRON_SECRET || "";
+    const signature = req.headers.get("Upstash-Signature") || "";
+    const authHeader = req.headers.get("Authorization") || "";
 
-    if (signingKey) {
-      const isValid = verifyQStashSignature(bodyText, signature, signingKey);
-      if (!isValid) {
-        console.error("QStash signature verification failed");
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+    let isAuthorized = false;
+
+    if (signingKey && signature) {
+      isAuthorized = verifyQStashSignature(bodyText, signature, signingKey);
+    } else if (cronSecret && authHeader.replace("Bearer ", "").trim() === cronSecret) {
+      isAuthorized = true;
+    } else if (!signingKey && !cronSecret) {
+      // Modo Dev (sem chaves)
+      console.warn("Nenhuma chave de segurança configurada. Executando em modo aberto (Perigoso).");
+      isAuthorized = true;
     }
-    // Se signingKey não configurado, loga warning mas continua (modo dev)
-    if (!signingKey) {
-      console.warn("QSTASH_CURRENT_SIGNING_KEY not set — skipping signature verification (dev mode)");
+
+    if (!isAuthorized) {
+      console.error("Tentativa não autorizada no Webhook");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // 2. Busca followups agendados que estejam prontos para envio

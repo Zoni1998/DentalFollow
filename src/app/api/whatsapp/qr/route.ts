@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/whatsapp/qr
  * Busca o QR code da instância Evolution API para conexão do WhatsApp.

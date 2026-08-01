@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/followups?status=Pendente&search=joao
  * Lista todos os followups com join de paciente.

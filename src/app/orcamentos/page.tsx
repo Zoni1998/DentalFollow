@@ -93,7 +93,12 @@ export default function OrcamentosPage() {
                 Orçamentos em Aberto
               </h1>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-3">
+              <Link href="/historico">
+                <Button variant="outline" className="rounded-full h-9">Histórico</Button>
+              </Link>
+              <ThemeToggle />
+            </div>
           </div>
         </header>
 

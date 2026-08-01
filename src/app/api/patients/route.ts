@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sanitizePhone } from "@/lib/format";
 
 /**
  * POST /api/patients
@@ -9,7 +10,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, phone, treatment, amount, message, scheduled_at, status } = body;
+    let { name, phone, treatment, amount, message, scheduled_at, status } = body;
+    phone = sanitizePhone(phone);
 
     // Validação de entrada
     if (!name || !phone || !treatment) {
@@ -89,7 +91,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const {
+    let {
       followup_id,
       patient_name,
       patient_phone,
@@ -100,6 +102,10 @@ export async function PUT(req: Request) {
       status,
       lost_reason,
     } = body;
+    
+    if (patient_phone) {
+      patient_phone = sanitizePhone(patient_phone);
+    }
 
     if (!followup_id) {
       return NextResponse.json({ error: "followup_id é obrigatório" }, { status: 400 });

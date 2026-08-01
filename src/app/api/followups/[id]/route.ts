@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/followups/[id]
  * Retorna a ficha completa de um followup (com dados do paciente).

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { sendWhatsAppMessage } from "@/lib/zapi";
+import { sendWhatsAppMessage } from "@/lib/evolution";
 
 /**
  * POST /api/whatsapp/send
