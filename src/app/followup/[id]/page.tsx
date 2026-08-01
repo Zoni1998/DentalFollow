@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, MessageCircle, CheckCircle2, Phone, Calendar, Clock, ShieldCheck, XCircle, Pencil, Save, X, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, MessageCircle, CheckCircle2, Phone, Calendar, Clock, ShieldCheck, XCircle, Pencil, Save, X, Loader2, Trash2 } from "lucide-react";
 import { ToothIcon } from "@/components/ui/tooth-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,8 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
   const [isEditing, setIsEditing] = useState(false);
   const [sending, setSending] = useState(false);
   const [editData, setEditData] = useState<FollowupDetail | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   const fetchFup = useCallback(async () => {
     try {
@@ -137,6 +140,22 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
     }
   };
 
+  const handleDelete = async () => {
+    if (!fup || !confirm("Tem certeza que deseja apagar permanentemente esta ficha de paciente?")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/followups/${fup.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Falha ao apagar");
+      toast.success("Ficha do paciente apagada com sucesso!");
+      router.push("/orcamentos");
+    } catch (err) {
+      toast.error("Erro ao apagar ficha");
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -178,6 +197,17 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
               </h1>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-full"
+                onClick={handleDelete}
+                disabled={deleting}
+                title="Apagar ficha"
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </Button>
+              <ThemeToggle />
               {isEditing ? (
                 <>
                   <Button variant="ghost" size="icon" onClick={() => { setEditData(fup); setIsEditing(false); }} className="rounded-full">

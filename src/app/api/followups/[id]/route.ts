@@ -43,3 +43,46 @@ export async function GET(
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/followups/[id]
+ * Remove um followup e o paciente associado se desejar.
+ */
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    // Primeiro busca o patient_id para deletar o paciente também
+    const { data: fup } = await supabaseAdmin
+      .from("followups")
+      .select("patient_id")
+      .eq("id", id)
+      .single();
+
+    // Deleta o followup
+    const { error: fupError } = await supabaseAdmin
+      .from("followups")
+      .delete()
+      .eq("id", id);
+      
+    if (fupError) {
+      return NextResponse.json({ error: fupError.message }, { status: 500 });
+    }
+
+    // Opcionalmente deleta o paciente para não deixar sujeira
+    if (fup?.patient_id) {
+      await supabaseAdmin
+        .from("patients")
+        .delete()
+        .eq("id", fup.patient_id);
+    }
+    
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error("Erro em DELETE /api/followups/[id]:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
