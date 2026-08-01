@@ -21,19 +21,15 @@ export async function GET() {
   try {
     const baseUrl = apiUrl.replace(/\/$/, "");
 
-    // 1. Tenta conectar na instância e pegar o QR Code
-    let connectUrl = `${baseUrl}/instance/connect/${instanceName}`;
-    let response = await fetch(connectUrl, {
-      method: "GET",
+    // 1. Tenta verificar o estado atual
+    let stateRes = await fetch(`${baseUrl}/instance/connectionState/${instanceName}`, {
       headers: { "apikey": apiKey }
     });
-
-    let data = await response.json();
-
-    // 2. Se a instância não existir (404), criamos ela
-    if (response.status === 404 || (data.message && data.message.includes("not found"))) {
+    
+    // Se a instância não existir (404), criamos ela
+    if (stateRes.status === 404 || stateRes.status === 400) {
       const createUrl = `${baseUrl}/instance/create`;
-      response = await fetch(createUrl, {
+      await fetch(createUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -45,33 +41,61 @@ export async function GET() {
           integration: "WHATSAPP-BAILEYS"
         })
       });
-      data = await response.json();
-    } else if (response.status === 401 || response.status === 403) {
+      // Aguarda um pouco para a instância inicializar
+      await new Promise(r => setTimeout(r, 1000));
+    } else {
+      let stateData = await stateRes.json();
+      if (stateData?.instance?.state === "open") {
+        // Já está conectado, busca o número
+        const instRes = await fetch(`${baseUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
+          headers: { "apikey": apiKey }
+        });
+        const instData = await instRes.json();
+        const ownerJid = instData?.[0]?.ownerJid || "";
+        const phone = ownerJid.split("@")[0];
+        
+        return NextResponse.json({
+          connected: true,
+          phone: phone || "Conectado",
+        });
+      } else if (stateData?.instance?.state === "connecting") {
+         return NextResponse.json({
+          connected: false,
+          error: "Conectando ao WhatsApp... Aguarde.",
+        });
+      }
+    }
+
+    // 2. Se não estiver open, pegamos o QR Code
+    let connectUrl = `${baseUrl}/instance/connect/${instanceName}`;
+    let response = await fetch(connectUrl, {
+      method: "GET",
+      headers: { "apikey": apiKey }
+    });
+    
+    if (response.status === 401 || response.status === 403) {
       return NextResponse.json({
         connected: false,
         error: "Credenciais da Evolution API recusadas. Verifique a API Key.",
       }, { status: 401 });
     }
 
-    // 3. Processa a resposta
+    let data = await response.json();
+
+    // 3. Processa a resposta do QR Code
     if (data.base64 || (data.qrcode && data.qrcode.base64)) {
       const qrCode = data.base64 || data.qrcode.base64;
       return NextResponse.json({
         connected: false,
         qrcode: qrCode,
       });
-    } else if (data.instance?.status === "open" || data.instance?.state === "open") {
-      return NextResponse.json({
-        connected: true,
-        phone: data.instance?.owner || null,
-      });
     }
 
     return NextResponse.json({
       connected: false,
-      error: "Status desconhecido da Evolution API.",
-    }, { status: 500 });
-    
+      error: "Aguardando geração do QR Code. Tente novamente em alguns segundos.",
+    });
+        
     } catch (err: any) {
     console.error("Erro em GET /api/whatsapp/qr:", err);
     return NextResponse.json({
