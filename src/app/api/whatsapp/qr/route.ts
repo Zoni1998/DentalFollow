@@ -72,11 +72,40 @@ export async function GET() {
       error: "Status desconhecido da Evolution API.",
     }, { status: 500 });
     
-  } catch (err: any) {
+    } catch (err: any) {
     console.error("Erro em GET /api/whatsapp/qr:", err);
     return NextResponse.json({
       connected: false,
       error: err.message,
     }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/whatsapp/qr
+ * Desconecta a instância do WhatsApp (Logout).
+ */
+export async function DELETE() {
+  const apiUrl = process.env.EVOLUTION_API_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  const instanceName = process.env.EVOLUTION_INSTANCE_NAME || "Padrao";
+
+  if (!apiUrl || !apiKey) {
+    return NextResponse.json({ success: true, mock: true });
+  }
+
+  try {
+    const baseUrl = apiUrl.replace(/\/$/, "");
+    const logoutUrl = `${baseUrl}/instance/logout/${instanceName}`;
+    
+    await fetch(logoutUrl, {
+      method: "DELETE",
+      headers: { "apikey": apiKey }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error("Erro ao desconectar WhatsApp:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

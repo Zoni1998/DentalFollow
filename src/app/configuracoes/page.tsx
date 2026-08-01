@@ -92,11 +92,18 @@ export default function Configuracoes() {
     handleConnect();
   };
 
-  const handleDisconnect = () => {
-    setConnectionState("disconnected");
-    setQrCode(null);
-    setPhone(null);
-    toast.info("WhatsApp desconectado");
+  const handleDisconnect = async () => {
+    try {
+      const res = await fetch("/api/whatsapp/qr", { method: "DELETE" });
+      if (!res.ok) throw new Error("Erro ao desconectar");
+      setConnectionState("disconnected");
+      setQrCode(null);
+      setPhone(null);
+      toast.success("WhatsApp desconectado com sucesso!");
+    } catch (err) {
+      toast.error("Erro ao desconectar o aparelho.");
+      console.error(err);
+    }
   };
 
   return (
