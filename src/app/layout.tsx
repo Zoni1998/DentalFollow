@@ -9,8 +9,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DentalFollow - CRM",
-  description: "CRM de Follow-up Odontológico",
+  title: "DentalFollow | Follow-up odontológico",
+  description: "CRM de acompanhamento e conversão para clínicas odontológicas",
+  icons: {
+    icon: "/dentalfollow-mark.png",
+    apple: "/dentalfollow-mark.png",
+  },
 };
 
 import { Toaster } from "@/components/ui/sonner";
