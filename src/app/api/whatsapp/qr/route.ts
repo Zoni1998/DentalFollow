@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const REQUEST_TIMEOUT_MS = 12_000;
-const REMOVE_TIMEOUT_MS = 20_000;
+const LOGOUT_TIMEOUT_MS = 20_000;
 const QR_ATTEMPTS = 5;
 
 type EvolutionConfig = {
@@ -75,70 +75,75 @@ function extractQrCode(data: any): string | null {
   );
 }
 
-async function fetchConnectionState(config: EvolutionConfig) {
+async function fetchConnectionState(
+  config: EvolutionConfig,
+  timeoutMs = REQUEST_TIMEOUT_MS
+) {
   return evolutionFetch(
     `${config.baseUrl}/instance/connectionState/${config.encodedInstanceName}`,
-    config.apiKey
+    config.apiKey,
+    {},
+    timeoutMs
   );
 }
 
-async function fetchQrCode(config: EvolutionConfig) {
+async function fetchQrCode(
+  config: EvolutionConfig,
+  timeoutMs = REQUEST_TIMEOUT_MS
+) {
   const response = await evolutionFetch(
     `${config.baseUrl}/instance/connect/${config.encodedInstanceName}`,
-    config.apiKey
+    config.apiKey,
+    {},
+    timeoutMs
   );
   const data = await readResponse(response);
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       getErrorMessage(data, `Evolution API recusou o QR Code (${response.status})`)
     );
+    Object.assign(error, { status: response.status });
+    throw error;
   }
 
   return extractQrCode(data);
 }
 
-async function removeExistingInstance(config: EvolutionConfig) {
-  let removalTimedOut = false;
-
+async function logoutExistingInstance(config: EvolutionConfig) {
   try {
-    // O endpoint de exclusão da Evolution já encerra uma sessão aberta.
-    // Chamar logout antes fazia a troca depender de duas operações longas.
-    const deleteResponse = await evolutionFetch(
-      `${config.baseUrl}/instance/delete/${config.encodedInstanceName}`,
+    const logoutResponse = await evolutionFetch(
+      `${config.baseUrl}/instance/logout/${config.encodedInstanceName}`,
       config.apiKey,
       { method: "DELETE" },
-      REMOVE_TIMEOUT_MS
+      LOGOUT_TIMEOUT_MS
     );
-    const deleteData = await readResponse(deleteResponse);
+    const logoutData = await readResponse(logoutResponse);
 
-    if (![200, 201, 204, 400, 404].includes(deleteResponse.status)) {
+    if (logoutResponse.status === 404) return "missing" as const;
+
+    if ([200, 201, 204].includes(logoutResponse.status)) {
+      return "confirmed" as const;
+    }
+
+    // Algumas versões encerram a sessão, mas o proxy responde 400/5xx depois.
+    // O estado real será consultado antes de informar uma falha.
+    if ([400, 409, 500, 502, 503, 504].includes(logoutResponse.status)) {
+      return "uncertain" as const;
+    }
+
+    if (!logoutResponse.ok) {
       throw new Error(
-        getErrorMessage(deleteData, `Falha ao apagar a instância (${deleteResponse.status})`)
+        getErrorMessage(logoutData, `Falha ao desvincular o WhatsApp (${logoutResponse.status})`)
       );
     }
   } catch (error: any) {
-    removalTimedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
-    if (!removalTimedOut) throw error;
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    if (timedOut) return "uncertain" as const;
+    throw error;
   }
 
-  // Uma exclusão pode terminar no servidor depois de a conexão HTTP expirar.
-  // Confirmamos o estado real antes de considerar a operação como falha.
-  await new Promise((resolve) => setTimeout(resolve, 700));
-  const verificationResponse = await fetchConnectionState(config);
-
-  if ([400, 404].includes(verificationResponse.status)) return;
-
-  if (removalTimedOut) {
-    throw new Error(
-      "A instância antiga ainda está sendo encerrada. Aguarde alguns segundos e tente novamente."
-    );
-  }
-
-  const verificationData = await readResponse(verificationResponse);
-  throw new Error(
-    getErrorMessage(verificationData, "A Evolution API ainda mantém a instância antiga.")
-  );
+  return "confirmed" as const;
 }
 
 function notConfiguredResponse() {
@@ -216,14 +221,67 @@ export async function GET() {
 
 /**
  * POST /api/whatsapp/qr
- * Remove qualquer sessão anterior e cria uma instância totalmente nova.
+ * Desvincula a conta anterior e gera um QR novo na mesma instância.
  */
 export async function POST() {
   const config = getEvolutionConfig();
   if (!config) return notConfiguredResponse();
 
   try {
-    await removeExistingInstance(config);
+    const logoutResult = await logoutExistingInstance(config);
+
+    if (logoutResult !== "missing") {
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+
+      try {
+        const qrcode = await fetchQrCode(config, 15_000);
+        if (qrcode) {
+          return NextResponse.json({ connected: false, qrcode, switched: true });
+        }
+      } catch (error: any) {
+        if ([401, 403].includes(error?.status)) throw error;
+        // Se a sessão ainda estiver terminando, a tela continuará consultando o estado.
+      }
+
+      try {
+        const stateResponse = await fetchConnectionState(config, 8_000);
+        const stateData = await readResponse(stateResponse);
+        const state = stateData?.instance?.state || stateData?.state;
+
+        if (state === "open") {
+          return NextResponse.json(
+            {
+              connected: true,
+              error: "A conta anterior ainda está sendo desvinculada. Aguarde alguns segundos e tente novamente.",
+            },
+            { status: 409 }
+          );
+        }
+
+        if (![400, 404].includes(stateResponse.status)) {
+          return NextResponse.json(
+            {
+              connected: false,
+              pending: true,
+              message: "A conta anterior foi desvinculada e o QR Code está sendo preparado.",
+            },
+            { status: 202 }
+          );
+        }
+      } catch (error: any) {
+        const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+        if (!timedOut) throw error;
+
+        return NextResponse.json(
+          {
+            connected: false,
+            pending: true,
+            message: "A troca foi solicitada. Aguardando a Evolution liberar o novo QR Code.",
+          },
+          { status: 202 }
+        );
+      }
+    }
 
     const createResponse = await evolutionFetch(
       `${config.baseUrl}/instance/create`,
@@ -290,15 +348,37 @@ export async function POST() {
 
 /**
  * DELETE /api/whatsapp/qr
- * Faz logout e apaga a instância para remover as credenciais antigas.
+ * Faz logout para remover as credenciais da conta antiga.
  */
 export async function DELETE() {
   const config = getEvolutionConfig();
   if (!config) return NextResponse.json({ success: true, mock: true });
 
   try {
-    await removeExistingInstance(config);
-    return NextResponse.json({ success: true, removed: true });
+    const logoutResult = await logoutExistingInstance(config);
+    if (logoutResult === "missing") {
+      return NextResponse.json({ success: true, disconnected: true });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+
+    try {
+      const verificationResponse = await fetchConnectionState(config, 8_000);
+      const verificationData = await readResponse(verificationResponse);
+      const state = verificationData?.instance?.state || verificationData?.state;
+
+      if (state === "open") {
+        return NextResponse.json(
+          { success: false, error: "O WhatsApp ainda está conectado. Tente novamente em alguns segundos." },
+          { status: 409 }
+        );
+      }
+    } catch (error: any) {
+      const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+      if (!timedOut || logoutResult === "uncertain") throw error;
+    }
+
+    return NextResponse.json({ success: true, disconnected: true });
   } catch (error: any) {
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
     return NextResponse.json(
