@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const REQUEST_TIMEOUT_MS = 12_000;
+const REMOVE_TIMEOUT_MS = 20_000;
 const QR_ATTEMPTS = 5;
 
 type EvolutionConfig = {
@@ -30,7 +31,8 @@ function getEvolutionConfig(): EvolutionConfig | null {
 async function evolutionFetch(
   url: string,
   apiKey: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS
 ) {
   return fetch(url, {
     ...init,
@@ -39,7 +41,7 @@ async function evolutionFetch(
       apikey: apiKey,
       ...init.headers,
     },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 }
 
@@ -97,33 +99,46 @@ async function fetchQrCode(config: EvolutionConfig) {
 }
 
 async function removeExistingInstance(config: EvolutionConfig) {
-  const logoutResponse = await evolutionFetch(
-    `${config.baseUrl}/instance/logout/${config.encodedInstanceName}`,
-    config.apiKey,
-    { method: "DELETE" }
-  );
-  const logoutData = await readResponse(logoutResponse);
+  let removalTimedOut = false;
 
-  if (![200, 201, 204, 400, 404].includes(logoutResponse.status)) {
-    throw new Error(
-      getErrorMessage(logoutData, `Falha ao desconectar (${logoutResponse.status})`)
+  try {
+    // O endpoint de exclusão da Evolution já encerra uma sessão aberta.
+    // Chamar logout antes fazia a troca depender de duas operações longas.
+    const deleteResponse = await evolutionFetch(
+      `${config.baseUrl}/instance/delete/${config.encodedInstanceName}`,
+      config.apiKey,
+      { method: "DELETE" },
+      REMOVE_TIMEOUT_MS
     );
+    const deleteData = await readResponse(deleteResponse);
+
+    if (![200, 201, 204, 400, 404].includes(deleteResponse.status)) {
+      throw new Error(
+        getErrorMessage(deleteData, `Falha ao apagar a instância (${deleteResponse.status})`)
+      );
+    }
+  } catch (error: any) {
+    removalTimedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    if (!removalTimedOut) throw error;
   }
 
-  const deleteResponse = await evolutionFetch(
-    `${config.baseUrl}/instance/delete/${config.encodedInstanceName}`,
-    config.apiKey,
-    { method: "DELETE" }
-  );
-  const deleteData = await readResponse(deleteResponse);
-
-  if (![200, 201, 204, 404].includes(deleteResponse.status)) {
-    throw new Error(
-      getErrorMessage(deleteData, `Falha ao apagar a instância (${deleteResponse.status})`)
-    );
-  }
-
+  // Uma exclusão pode terminar no servidor depois de a conexão HTTP expirar.
+  // Confirmamos o estado real antes de considerar a operação como falha.
   await new Promise((resolve) => setTimeout(resolve, 700));
+  const verificationResponse = await fetchConnectionState(config);
+
+  if ([400, 404].includes(verificationResponse.status)) return;
+
+  if (removalTimedOut) {
+    throw new Error(
+      "A instância antiga ainda está sendo encerrada. Aguarde alguns segundos e tente novamente."
+    );
+  }
+
+  const verificationData = await readResponse(verificationResponse);
+  throw new Error(
+    getErrorMessage(verificationData, "A Evolution API ainda mantém a instância antiga.")
+  );
 }
 
 function notConfiguredResponse() {
@@ -283,22 +298,6 @@ export async function DELETE() {
 
   try {
     await removeExistingInstance(config);
-
-    const verificationResponse = await fetchConnectionState(config);
-    if (![400, 404].includes(verificationResponse.status)) {
-      const verificationData = await readResponse(verificationResponse);
-      return NextResponse.json(
-        {
-          success: false,
-          error: getErrorMessage(
-            verificationData,
-            "A Evolution API ainda mantém a instância antiga."
-          ),
-        },
-        { status: 502 }
-      );
-    }
-
     return NextResponse.json({ success: true, removed: true });
   } catch (error: any) {
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
@@ -313,3 +312,4 @@ export async function DELETE() {
     );
   }
 }
+
