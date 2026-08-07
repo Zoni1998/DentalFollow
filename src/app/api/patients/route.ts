@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sanitizePhone } from "@/lib/format";
+import { isValidDateOnly } from "@/lib/budget";
 
 /**
  * POST /api/patients
@@ -10,13 +11,29 @@ import { sanitizePhone } from "@/lib/format";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    let { name, phone, treatment, amount, message, scheduled_at, status } = body;
-    phone = sanitizePhone(phone);
+    const {
+      name,
+      phone: rawPhone,
+      treatment,
+      amount,
+      message,
+      scheduled_at,
+      consultation_date,
+      status,
+    } = body;
+    const phone = sanitizePhone(rawPhone);
 
     // Validação de entrada
-    if (!name || !phone || !treatment) {
+    if (!name || !phone || !treatment || !consultation_date) {
       return NextResponse.json(
-        { error: "Nome, telefone e tratamento são obrigatórios" },
+        { error: "Nome, telefone, tratamento e data do atendimento são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidDateOnly(consultation_date)) {
+      return NextResponse.json(
+        { error: "Data do atendimento inválida" },
         { status: 400 }
       );
     }
@@ -24,7 +41,7 @@ export async function POST(req: Request) {
     // 1. Insert patient
     const { data: patientData, error: patientError } = await supabaseAdmin
       .from("patients")
-      .insert([{ name, phone, treatment }])
+      .insert([{ name, phone }])
       .select()
       .single();
 
@@ -39,6 +56,7 @@ export async function POST(req: Request) {
         .from("followups")
         .insert([{
           patient_id: patientData.id,
+          consultation_date,
           treatment,
           amount: parseFloat(amount) || 0,
           message,
@@ -61,6 +79,7 @@ export async function POST(req: Request) {
         .from("followups")
         .insert([{
           patient_id: patientData.id,
+          consultation_date,
           treatment,
           amount: parseFloat(amount) || 0,
           message: message || "",
@@ -91,21 +110,21 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    let {
+    const {
       followup_id,
       patient_name,
-      patient_phone,
+      patient_phone: rawPatientPhone,
       treatment,
       amount,
       message,
       scheduled_at,
+      consultation_date,
       status,
       lost_reason,
     } = body;
-    
-    if (patient_phone) {
-      patient_phone = sanitizePhone(patient_phone);
-    }
+    const patient_phone = rawPatientPhone
+      ? sanitizePhone(rawPatientPhone)
+      : rawPatientPhone;
 
     if (!followup_id) {
       return NextResponse.json({ error: "followup_id é obrigatório" }, { status: 400 });
@@ -141,6 +160,12 @@ export async function PUT(req: Request) {
     if (amount !== undefined) fupUpdate.amount = parseFloat(amount) || 0;
     if (message !== undefined) fupUpdate.message = message;
     if (scheduled_at !== undefined) fupUpdate.scheduled_at = scheduled_at;
+    if (consultation_date !== undefined) {
+      if (!isValidDateOnly(consultation_date)) {
+        return NextResponse.json({ error: "Data do atendimento inválida" }, { status: 400 });
+      }
+      fupUpdate.consultation_date = consultation_date;
+    }
     if (status !== undefined) fupUpdate.status = status;
     if (lost_reason !== undefined) fupUpdate.lost_reason = lost_reason;
 

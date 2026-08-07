@@ -13,6 +13,12 @@ import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
 
+function getTodayDateInputValue(): string {
+  const today = new Date();
+  const localTime = new Date(today.getTime() - today.getTimezoneOffset() * 60_000);
+  return localTime.toISOString().slice(0, 10);
+}
+
 export default function NovoFollowup() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,6 +48,7 @@ export default function NovoFollowup() {
     const treatment = (formData.get("tratamento") as string).trim();
     const value = (formData.get("valor") as string).trim();
     const message = (formData.get("mensagem") as string).trim();
+    const consultation_date = formData.get("data_consulta") as string;
     const date = formData.get("data") as string;
     const time = formData.get("hora") as string;
 
@@ -79,6 +86,7 @@ export default function NovoFollowup() {
           treatment,
           amount,
           message: message || "",
+          consultation_date,
           scheduled_at,
         }),
       });
@@ -166,6 +174,19 @@ export default function NovoFollowup() {
                     className="h-12 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl"
                   />
                 </div>
+              </MotionDiv>
+
+              <MotionDiv className="grid gap-3">
+                <Label htmlFor="data_consulta" className="text-sm font-medium text-foreground/80">Data do Atendimento</Label>
+                <Input
+                  id="data_consulta"
+                  name="data_consulta"
+                  type="date"
+                  defaultValue={getTodayDateInputValue()}
+                  required
+                  className="h-12 bg-foreground/5 border-foreground/10 text-foreground focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl [color-scheme:dark]"
+                />
+                <p className="text-xs text-muted-foreground">Informe o dia em que o paciente foi atendido. Esta data define se o orçamento está quente ou frio.</p>
               </MotionDiv>
 
               <MotionDiv className="grid gap-6 sm:grid-cols-2">

@@ -7,25 +7,18 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, getInitials } from "@/lib/format";
+import { formatCurrency, formatDate, getInitials } from "@/lib/format";
+import { getBudgetTemperature, getDaysSinceConsultation } from "@/lib/budget";
 
 interface BudgetFollowup {
   id: string;
+  consultation_date: string | null;
   treatment: string;
   amount: number;
   scheduled_at: string;
   status: string;
   created_at: string;
   patients: { id: string; name: string; phone: string } | null;
-}
-
-function getTemperature(dateStr: string): "Quente" | "Morno" | "Frio" {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays <= 7) return "Quente";
-  if (diffDays <= 15) return "Morno";
-  return "Frio";
 }
 
 export default function OrcamentosPage() {
@@ -64,12 +57,10 @@ export default function OrcamentosPage() {
   const totalPotential = followups.reduce((sum, f) => sum + f.amount, 0);
 
   // Agrupa por temperatura
-  const quente = followups.filter(f => getTemperature(f.created_at) === "Quente");
-  const morno = followups.filter(f => getTemperature(f.created_at) === "Morno");
-  const frio = followups.filter(f => getTemperature(f.created_at) === "Frio");
+  const quente = followups.filter(f => getBudgetTemperature(f.consultation_date || f.created_at) === "Quente");
+  const frio = followups.filter(f => getBudgetTemperature(f.consultation_date || f.created_at) === "Frio");
 
   const quenteTotal = quente.reduce((s, f) => s + f.amount, 0);
-  const mornoTotal = morno.reduce((s, f) => s + f.amount, 0);
   const frioTotal = frio.reduce((s, f) => s + f.amount, 0);
 
   // High-ticket: ordena por valor descending, top 5
@@ -118,13 +109,13 @@ export default function OrcamentosPage() {
             </MotionDiv>
 
             {/* Aging Pipeline */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
               <MotionDiv className="glass-panel p-6 rounded-2xl flex flex-col gap-2 relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-foreground/70 flex items-center gap-2">
                     <Clock className="h-4 w-4 text-emerald-500" />
-                    0 a 7 dias
+                    0 a 3 dias
                   </span>
                   <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Quente</Badge>
                 </div>
@@ -133,24 +124,11 @@ export default function OrcamentosPage() {
               </MotionDiv>
 
               <MotionDiv className="glass-panel p-6 rounded-2xl flex flex-col gap-2 relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-foreground/70 flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-amber-500" />
-                    8 a 15 dias
-                  </span>
-                  <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">Morno</Badge>
-                </div>
-                <div className="text-2xl font-light">{formatCurrency(mornoTotal)}</div>
-                <p className="text-xs text-foreground/50">{morno.length} orçamentos precisando de contato</p>
-              </MotionDiv>
-
-              <MotionDiv className="glass-panel p-6 rounded-2xl flex flex-col gap-2 relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-1 h-full bg-destructive" />
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-foreground/70 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-destructive" />
-                    15+ dias
+                    Acima de 3 dias
                   </span>
                   <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">Frio</Badge>
                 </div>
@@ -174,10 +152,11 @@ export default function OrcamentosPage() {
                   </div>
                 ) : (
                   highTicket.map((fup) => {
-                    const temp = getTemperature(fup.created_at);
+                    const consultationDate = fup.consultation_date || fup.created_at;
+                    const temp = getBudgetTemperature(consultationDate);
                     const patient = fup.patients;
                     if (!patient) return null;
-                    const daysPending = Math.floor((Date.now() - new Date(fup.created_at).getTime()) / (1000 * 60 * 60 * 24));
+                    const daysSinceConsultation = getDaysSinceConsultation(consultationDate);
                     return (
                       <div key={fup.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel-hover">
                         <div className="flex items-center gap-4">
@@ -186,16 +165,18 @@ export default function OrcamentosPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium truncate">{patient.name}</p>
-                            <p className="text-sm text-foreground/60 truncate">{fup.treatment} • {daysPending} dias pendente</p>
+                            <p className="text-sm text-foreground/60 truncate">
+                              {fup.treatment} • Atendido em {formatDate(consultationDate)} • {daysSinceConsultation} dias
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto mt-2 sm:mt-0">
                           <div className="text-left sm:text-right">
                             <p className="font-medium text-lg">{formatCurrency(fup.amount)}</p>
                             <Badge variant="outline" className={
-                              temp === "Quente" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 mt-1" :
-                              temp === "Morno" ? "bg-amber-500/10 text-amber-500 border-amber-500/20 mt-1" :
-                              "bg-destructive/10 text-destructive border-destructive/20 mt-1"
+                              temp === "Quente"
+                                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 mt-1"
+                                : "bg-destructive/10 text-destructive border-destructive/20 mt-1"
                             }>
                               {temp}
                             </Badge>
