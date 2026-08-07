@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
 import { toast } from "sonner";
 
-const CLIENT_TIMEOUT_MS = 25_000;
+const CLIENT_TIMEOUT_MS = 45_000;
 
 const wait = (milliseconds: number) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -128,6 +128,30 @@ export default function Configuracoes() {
 
       throw new Error("A nova instância foi criada, mas o QR Code ainda não ficou disponível.");
     } catch (err) {
+      // A Evolution pode concluir a criação mesmo quando a resposta expira.
+      // Recupera o estado verdadeiro antes de exibir uma falha para o usuário.
+      try {
+        const recoveryResponse = await fetchWithTimeout("/api/whatsapp/qr");
+        const recovery = await recoveryResponse.json();
+
+        if (recovery.connected) {
+          setConnectionState("connected");
+          setPhone(recovery.phone || null);
+          setError(null);
+          toast.success("WhatsApp conectado!");
+          return;
+        }
+
+        if (recovery.qrcode) {
+          setQrCode(recovery.qrcode);
+          setConnectionState("qrcode");
+          setError(null);
+          return;
+        }
+      } catch (recoveryError) {
+        console.error("Erro ao recuperar o estado do WhatsApp:", recoveryError);
+      }
+
       const message = err instanceof Error && err.name === "AbortError"
         ? "A Evolution API demorou demais para responder."
         : err instanceof Error
@@ -337,3 +361,4 @@ export default function Configuracoes() {
     </div>
   );
 }
+
