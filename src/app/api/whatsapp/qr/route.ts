@@ -2,136 +2,314 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/whatsapp/qr
- * Busca o QR code da instância Evolution API para conexão do WhatsApp.
- * Cria a instância automaticamente caso não exista.
- */
-export async function GET() {
+const REQUEST_TIMEOUT_MS = 12_000;
+const QR_ATTEMPTS = 5;
+
+type EvolutionConfig = {
+  baseUrl: string;
+  apiKey: string;
+  instanceName: string;
+  encodedInstanceName: string;
+};
+
+function getEvolutionConfig(): EvolutionConfig | null {
   const apiUrl = process.env.EVOLUTION_API_URL;
   const apiKey = process.env.EVOLUTION_API_KEY;
-  const instanceName = process.env.EVOLUTION_INSTANCE_NAME || "Padrao";
+  const instanceName = (process.env.EVOLUTION_INSTANCE_NAME || "Padrao").trim();
 
-  if (!apiUrl || !apiKey) {
-    return NextResponse.json({
-      connected: false,
-      error: "Evolution API não configurada. Configure EVOLUTION_API_URL e EVOLUTION_API_KEY no .env",
-      mock: true,
-    });
-  }
+  if (!apiUrl || !apiKey) return null;
+
+  return {
+    baseUrl: apiUrl.replace(/\/$/, ""),
+    apiKey,
+    instanceName,
+    encodedInstanceName: encodeURIComponent(instanceName),
+  };
+}
+
+async function evolutionFetch(
+  url: string,
+  apiKey: string,
+  init: RequestInit = {}
+) {
+  return fetch(url, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      apikey: apiKey,
+      ...init.headers,
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+}
+
+async function readResponse(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
 
   try {
-    const baseUrl = apiUrl.replace(/\/$/, "");
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
 
-    // 1. Tenta verificar o estado atual
-    let stateRes = await fetch(`${baseUrl}/instance/connectionState/${instanceName}`, {
-      headers: { "apikey": apiKey }
-    });
-    
-    // Se a instância não existir (404), criamos ela
-    if (stateRes.status === 404 || stateRes.status === 400) {
-      const createUrl = `${baseUrl}/instance/create`;
-      await fetch(createUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": apiKey
-        },
-        body: JSON.stringify({
-          instanceName: instanceName,
-          qrcode: true,
-          integration: "WHATSAPP-BAILEYS"
-        })
-      });
-      // Aguarda um pouco para a instância inicializar
-      await new Promise(r => setTimeout(r, 1000));
-    } else {
-      let stateData = await stateRes.json();
-      if (stateData?.instance?.state === "open") {
-        // Já está conectado, busca o número
-        const instRes = await fetch(`${baseUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
-          headers: { "apikey": apiKey }
-        });
-        const instData = await instRes.json();
-        const ownerJid = instData?.[0]?.ownerJid || "";
-        const phone = ownerJid.split("@")[0];
-        
-        return NextResponse.json({
-          connected: true,
-          phone: phone || "Conectado",
-        });
-      } else if (stateData?.instance?.state === "connecting") {
-         return NextResponse.json({
+function getErrorMessage(data: any, fallback: string) {
+  const responseMessage = data?.response?.message;
+
+  if (Array.isArray(responseMessage)) return responseMessage.join(", ");
+  if (typeof responseMessage === "string") return responseMessage;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.error === "string") return data.error;
+  return fallback;
+}
+
+function extractQrCode(data: any): string | null {
+  return (
+    data?.base64 ||
+    data?.qrcode?.base64 ||
+    data?.qrcode?.base64Code ||
+    null
+  );
+}
+
+async function fetchConnectionState(config: EvolutionConfig) {
+  return evolutionFetch(
+    `${config.baseUrl}/instance/connectionState/${config.encodedInstanceName}`,
+    config.apiKey
+  );
+}
+
+async function fetchQrCode(config: EvolutionConfig) {
+  const response = await evolutionFetch(
+    `${config.baseUrl}/instance/connect/${config.encodedInstanceName}`,
+    config.apiKey
+  );
+  const data = await readResponse(response);
+
+  if (!response.ok) {
+    throw new Error(
+      getErrorMessage(data, `Evolution API recusou o QR Code (${response.status})`)
+    );
+  }
+
+  return extractQrCode(data);
+}
+
+async function removeExistingInstance(config: EvolutionConfig) {
+  const logoutResponse = await evolutionFetch(
+    `${config.baseUrl}/instance/logout/${config.encodedInstanceName}`,
+    config.apiKey,
+    { method: "DELETE" }
+  );
+  const logoutData = await readResponse(logoutResponse);
+
+  if (![200, 201, 204, 400, 404].includes(logoutResponse.status)) {
+    throw new Error(
+      getErrorMessage(logoutData, `Falha ao desconectar (${logoutResponse.status})`)
+    );
+  }
+
+  const deleteResponse = await evolutionFetch(
+    `${config.baseUrl}/instance/delete/${config.encodedInstanceName}`,
+    config.apiKey,
+    { method: "DELETE" }
+  );
+  const deleteData = await readResponse(deleteResponse);
+
+  if (![200, 201, 204, 404].includes(deleteResponse.status)) {
+    throw new Error(
+      getErrorMessage(deleteData, `Falha ao apagar a instância (${deleteResponse.status})`)
+    );
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 700));
+}
+
+function notConfiguredResponse() {
+  return NextResponse.json({
+    connected: false,
+    error: "Evolution API não configurada. Configure EVOLUTION_API_URL e EVOLUTION_API_KEY.",
+    mock: true,
+  });
+}
+
+/**
+ * GET /api/whatsapp/qr
+ * Consulta o estado atual sem recriar ou apagar a instância.
+ */
+export async function GET() {
+  const config = getEvolutionConfig();
+  if (!config) return notConfiguredResponse();
+
+  try {
+    const stateResponse = await fetchConnectionState(config);
+    const stateData = await readResponse(stateResponse);
+
+    if ([400, 404].includes(stateResponse.status)) {
+      return NextResponse.json({ connected: false });
+    }
+
+    if (!stateResponse.ok) {
+      return NextResponse.json(
+        {
           connected: false,
-          error: "Conectando ao WhatsApp... Aguarde.",
-        });
+          error: getErrorMessage(
+            stateData,
+            `Não foi possível consultar a Evolution API (${stateResponse.status})`
+          ),
+        },
+        { status: stateResponse.status === 401 || stateResponse.status === 403 ? 401 : 502 }
+      );
+    }
+
+    const state = stateData?.instance?.state || stateData?.state;
+
+    if (state === "open") {
+      const instanceResponse = await evolutionFetch(
+        `${config.baseUrl}/instance/fetchInstances?instanceName=${config.encodedInstanceName}`,
+        config.apiKey
+      );
+      const instanceData = await readResponse(instanceResponse);
+      const ownerJid = Array.isArray(instanceData) ? instanceData?.[0]?.ownerJid || "" : "";
+
+      return NextResponse.json({
+        connected: true,
+        phone: ownerJid.split("@")[0] || "Conectado",
+      });
+    }
+
+    if (state === "connecting") {
+      const qrcode = await fetchQrCode(config);
+      return NextResponse.json({ connected: false, qrcode, pending: !qrcode });
+    }
+
+    return NextResponse.json({ connected: false });
+  } catch (error: any) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    return NextResponse.json(
+      {
+        connected: false,
+        error: timedOut
+          ? "A Evolution API demorou demais para responder. Tente novamente."
+          : error?.message || "Falha ao consultar a Evolution API.",
+      },
+      { status: 504 }
+    );
+  }
+}
+
+/**
+ * POST /api/whatsapp/qr
+ * Remove qualquer sessão anterior e cria uma instância totalmente nova.
+ */
+export async function POST() {
+  const config = getEvolutionConfig();
+  if (!config) return notConfiguredResponse();
+
+  try {
+    await removeExistingInstance(config);
+
+    const createResponse = await evolutionFetch(
+      `${config.baseUrl}/instance/create`,
+      config.apiKey,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instanceName: config.instanceName,
+          qrcode: true,
+          integration: "WHATSAPP-BAILEYS",
+        }),
+      }
+    );
+    const createData = await readResponse(createResponse);
+
+    if (!createResponse.ok) {
+      return NextResponse.json(
+        {
+          connected: false,
+          error: getErrorMessage(
+            createData,
+            `Falha ao criar uma nova instância (${createResponse.status})`
+          ),
+        },
+        { status: createResponse.status === 401 || createResponse.status === 403 ? 401 : 502 }
+      );
+    }
+
+    const createQrCode = extractQrCode(createData);
+    if (createQrCode) {
+      return NextResponse.json({ connected: false, qrcode: createQrCode });
+    }
+
+    for (let attempt = 0; attempt < QR_ATTEMPTS; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      const qrcode = await fetchQrCode(config);
+      if (qrcode) {
+        return NextResponse.json({ connected: false, qrcode });
       }
     }
 
-    // 2. Se não estiver open, pegamos o QR Code
-    let connectUrl = `${baseUrl}/instance/connect/${instanceName}`;
-    let response = await fetch(connectUrl, {
-      method: "GET",
-      headers: { "apikey": apiKey }
-    });
-    
-    if (response.status === 401 || response.status === 403) {
-      return NextResponse.json({
+    return NextResponse.json(
+      {
         connected: false,
-        error: "Credenciais da Evolution API recusadas. Verifique a API Key.",
-      }, { status: 401 });
-    }
-
-    let data = await response.json();
-
-    // 3. Processa a resposta do QR Code
-    if (data.base64 || (data.qrcode && data.qrcode.base64)) {
-      const qrCode = data.base64 || data.qrcode.base64;
-      return NextResponse.json({
+        pending: true,
+        message: "A nova instância foi criada e o QR Code ainda está sendo preparado.",
+      },
+      { status: 202 }
+    );
+  } catch (error: any) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    return NextResponse.json(
+      {
         connected: false,
-        qrcode: qrCode,
-      });
-    }
-
-    return NextResponse.json({
-      connected: false,
-      error: "Aguardando geração do QR Code. Tente novamente em alguns segundos.",
-    });
-        
-    } catch (err: any) {
-    console.error("Erro em GET /api/whatsapp/qr:", err);
-    return NextResponse.json({
-      connected: false,
-      error: err.message,
-    }, { status: 500 });
+        error: timedOut
+          ? "A Evolution API demorou demais para responder durante a troca."
+          : error?.message || "Falha ao criar uma nova instância.",
+      },
+      { status: timedOut ? 504 : 502 }
+    );
   }
 }
 
 /**
  * DELETE /api/whatsapp/qr
- * Desconecta a instância do WhatsApp (Logout).
+ * Faz logout e apaga a instância para remover as credenciais antigas.
  */
 export async function DELETE() {
-  const apiUrl = process.env.EVOLUTION_API_URL;
-  const apiKey = process.env.EVOLUTION_API_KEY;
-  const instanceName = process.env.EVOLUTION_INSTANCE_NAME || "Padrao";
-
-  if (!apiUrl || !apiKey) {
-    return NextResponse.json({ success: true, mock: true });
-  }
+  const config = getEvolutionConfig();
+  if (!config) return NextResponse.json({ success: true, mock: true });
 
   try {
-    const baseUrl = apiUrl.replace(/\/$/, "");
-    const logoutUrl = `${baseUrl}/instance/logout/${instanceName}`;
-    
-    await fetch(logoutUrl, {
-      method: "DELETE",
-      headers: { "apikey": apiKey }
-    });
+    await removeExistingInstance(config);
 
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
-    console.error("Erro ao desconectar WhatsApp:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const verificationResponse = await fetchConnectionState(config);
+    if (![400, 404].includes(verificationResponse.status)) {
+      const verificationData = await readResponse(verificationResponse);
+      return NextResponse.json(
+        {
+          success: false,
+          error: getErrorMessage(
+            verificationData,
+            "A Evolution API ainda mantém a instância antiga."
+          ),
+        },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({ success: true, removed: true });
+  } catch (error: any) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    return NextResponse.json(
+      {
+        success: false,
+        error: timedOut
+          ? "A Evolution API demorou demais para confirmar a desconexão."
+          : error?.message || "Falha ao remover a instância antiga.",
+      },
+      { status: timedOut ? 504 : 502 }
+    );
   }
 }
