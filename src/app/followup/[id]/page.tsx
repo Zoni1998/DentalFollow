@@ -17,12 +17,14 @@ import { formatCurrency, formatDate, formatTime, getStatusBadgeClass } from "@/l
 
 interface FollowupDetail {
   id: string;
+  consultation_date: string | null;
   treatment: string;
   amount: number;
   message: string;
   scheduled_at: string;
   status: string;
   lost_reason: string | null;
+  created_at: string;
   patients: { id: string; name: string; phone: string } | null;
 }
 
@@ -69,6 +71,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
           amount: editData.amount,
           message: editData.message,
           scheduled_at: editData.scheduled_at,
+          consultation_date: editData.consultation_date,
           status: editData.status,
           lost_reason: editData.lost_reason,
         }),
@@ -301,7 +304,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                 </div>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-6 pt-6 border-t border-border">
+              <div className="grid sm:grid-cols-3 gap-6 pt-6 border-t border-border">
                 <div>
                   <span className="text-sm font-light text-muted-foreground block mb-1">Valor na Mesa</span>
                   {isEditing ? (
@@ -312,6 +315,22 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                     />
                   ) : (
                     <span className="text-3xl font-light text-foreground">{formatCurrency(displayData.amount)}</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-sm font-light text-muted-foreground block mb-2">Data do Atendimento</span>
+                  {isEditing ? (
+                    <Input
+                      type="date"
+                      value={editData?.consultation_date || ""}
+                      onChange={e => setEditData(prev => prev ? { ...prev, consultation_date: e.target.value } : prev)}
+                      className="h-10 bg-foreground/5 border-border focus-visible:ring-primary [color-scheme:dark]"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2 bg-foreground/5 border border-border rounded-lg px-3 py-1.5 w-fit">
+                      <Calendar className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-light">{formatDate(displayData.consultation_date || displayData.created_at)}</span>
+                    </div>
                   )}
                 </div>
                 <div>

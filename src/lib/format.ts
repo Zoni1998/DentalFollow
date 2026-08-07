@@ -32,6 +32,13 @@ export function getInitials(name: string): string {
  */
 export function formatDate(isoDate: string): string {
   if (!isoDate) return "—";
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString("pt-BR");
+  }
+
   return new Date(isoDate).toLocaleDateString("pt-BR");
 }
 

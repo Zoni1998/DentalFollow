@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.patients (
 CREATE TABLE IF NOT EXISTS public.followups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id UUID NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
+    consultation_date DATE NOT NULL DEFAULT CURRENT_DATE,
     treatment TEXT NOT NULL,
     amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     message TEXT NOT NULL DEFAULT '',
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.followups (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_patients_phone ON public.patients(phone);
 CREATE INDEX IF NOT EXISTS idx_followups_patient_id ON public.followups(patient_id);
+CREATE INDEX IF NOT EXISTS idx_followups_consultation_date ON public.followups(consultation_date);
 CREATE INDEX IF NOT EXISTS idx_followups_scheduled_at ON public.followups(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_followups_status ON public.followups(status);
 

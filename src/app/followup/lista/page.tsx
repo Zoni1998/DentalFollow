@@ -21,10 +21,13 @@ import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
 import { toast } from "sonner";
-import { formatCurrency, getInitials, formatDateTime, getStatusBadgeClass } from "@/lib/format";
+import { formatCurrency, getInitials, formatDate, formatDateTime, getStatusBadgeClass } from "@/lib/format";
+import { comparePatientNames } from "@/lib/budget";
 
 interface Followup {
   id: string;
+  consultation_date: string | null;
+  created_at: string;
   treatment: string;
   amount: number;
   message: string;
@@ -60,20 +63,22 @@ export default function FollowUpLista() {
   }, [fetchFollowups]);
 
   // Filter patients based on search and tab
-  const filteredFollowups = followups.filter((fup) => {
-    const patient = fup.patients;
-    const name = patient?.name?.toLowerCase() || "";
-    const treatment = fup.treatment?.toLowerCase() || "";
-    const matchesSearch =
-      name.includes(searchTerm.toLowerCase()) ||
-      treatment.includes(searchTerm.toLowerCase());
+  const filteredFollowups = followups
+    .filter((fup) => {
+      const patient = fup.patients;
+      const name = patient?.name?.toLowerCase() || "";
+      const treatment = fup.treatment?.toLowerCase() || "";
+      const matchesSearch =
+        name.includes(searchTerm.toLowerCase()) ||
+        treatment.includes(searchTerm.toLowerCase());
 
-    if (activeTab === "todos") return matchesSearch;
-    return (
-      matchesSearch &&
-      fup.status.toLowerCase() === activeTab.toLowerCase()
-    );
-  });
+      if (activeTab === "todos") return matchesSearch;
+      return (
+        matchesSearch &&
+        fup.status.toLowerCase() === activeTab.toLowerCase()
+      );
+    })
+    .sort(comparePatientNames);
 
   const handleStatusChange = async (followupId: string, newStatus: string, lostReason?: string) => {
     try {
@@ -199,6 +204,9 @@ export default function FollowUpLista() {
                               <span className="text-xs text-muted-foreground/60">•</span>
                               <span className="text-sm font-light text-muted-foreground">{patient.phone}</span>
                             </div>
+                            <p className="text-xs text-muted-foreground/80 mt-1">
+                              Atendido em {formatDate(fup.consultation_date || fup.created_at)}
+                            </p>
                           </div>
                         </div>
                         

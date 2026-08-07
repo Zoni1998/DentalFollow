@@ -7,10 +7,12 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, getInitials } from "@/lib/format";
+import { formatCurrency, formatDate, getInitials } from "@/lib/format";
+import { comparePatientNames } from "@/lib/budget";
 
 interface BudgetFollowup {
   id: string;
+  consultation_date: string | null;
   treatment: string;
   amount: number;
   scheduled_at: string;
@@ -36,8 +38,8 @@ export default function HistoricoPage() {
         (f: BudgetFollowup) => f.status === "Fechado" || f.status === "Perdido"
       );
       
-      // Ordena pelos mais recentes primeiro
-      closed.sort((a: BudgetFollowup, b: BudgetFollowup) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // Mantém o histórico em ordem alfabética pelo nome do paciente.
+      closed.sort(comparePatientNames);
       
       setFollowups(closed);
     } catch (err) {
@@ -139,7 +141,7 @@ export default function HistoricoPage() {
                   filteredFollowups.map((fup) => {
                     const patient = fup.patients;
                     if (!patient) return null;
-                    const dateStr = new Date(fup.created_at).toLocaleDateString("pt-BR");
+                    const consultationDate = fup.consultation_date || fup.created_at;
                     
                     return (
                       <div key={fup.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel-hover opacity-80 hover:opacity-100 transition-opacity">
@@ -154,7 +156,9 @@ export default function HistoricoPage() {
                                 {fup.status}
                               </Badge>
                             </p>
-                            <p className="text-sm text-foreground/60 truncate">{fup.treatment} • Criado em {dateStr}</p>
+                            <p className="text-sm text-foreground/60 truncate">
+                              {fup.treatment} • Atendido em {formatDate(consultationDate)}
+                            </p>
                             {fup.lost_reason && (
                               <p className="text-xs text-destructive/80 mt-1">Motivo: {fup.lost_reason}</p>
                             )}

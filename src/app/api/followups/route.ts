@@ -18,6 +18,7 @@ export async function GET(req: Request) {
       .from("followups")
       .select(`
         id,
+        consultation_date,
         treatment,
         amount,
         message,
