@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     // 1. Insert patient
     const { data: patientData, error: patientError } = await supabaseAdmin
       .from("patients")
-      .insert([{ name, phone }])
+      .insert([{ name, phone, treatment }])
       .select()
       .single();
 
@@ -145,6 +145,7 @@ export async function PUT(req: Request) {
     const patientUpdate: Record<string, any> = {};
     if (patient_name !== undefined) patientUpdate.name = patient_name;
     if (patient_phone !== undefined) patientUpdate.phone = patient_phone;
+    if (treatment !== undefined) patientUpdate.treatment = treatment;
 
     if (Object.keys(patientUpdate).length > 0) {
       const { error: pErr } = await supabaseAdmin
