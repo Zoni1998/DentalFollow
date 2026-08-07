@@ -2,11 +2,27 @@
 
 import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Smartphone, QrCode, CheckCircle2, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Smartphone, QrCode, CheckCircle2, ShieldCheck, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
 import { toast } from "sonner";
+
+const CLIENT_TIMEOUT_MS = 25_000;
+
+const wait = (milliseconds: number) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
 
 export default function Configuracoes() {
   const [connectionState, setConnectionState] = useState<"disconnected" | "generating" | "qrcode" | "connected">("disconnected");
@@ -22,7 +38,7 @@ export default function Configuracoes() {
 
   const checkStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/whatsapp/qr");
+      const res = await fetchWithTimeout("/api/whatsapp/qr");
       const json = await res.json();
 
       if (json.mock) {
@@ -33,9 +49,17 @@ export default function Configuracoes() {
       if (json.connected) {
         setConnectionState("connected");
         setPhone(json.phone || null);
+        setError(null);
+      } else if (json.qrcode) {
+        setQrCode(json.qrcode);
+        setConnectionState("qrcode");
+        setError(null);
+      } else {
+        setConnectionState("disconnected");
       }
     } catch (err) {
       console.error("Erro ao verificar status:", err);
+      setConnectionState("disconnected");
     }
   }, []);
 
@@ -44,8 +68,8 @@ export default function Configuracoes() {
     setError(null);
 
     try {
-      const res = await fetch("/api/whatsapp/qr");
-      const json = await res.json();
+      let res = await fetchWithTimeout("/api/whatsapp/qr", { method: "POST" });
+      let json = await res.json();
 
       if (json.mock) {
         setIsMock(true);
@@ -75,15 +99,43 @@ export default function Configuracoes() {
       if (json.qrcode) {
         setQrCode(json.qrcode);
         setConnectionState("qrcode");
-      } else {
-        // Se a instância foi recém-criada mas ainda não tem QR Code pronto, ou erro interno
-        setError("Não foi possível obter o QR Code. Tente novamente em alguns segundos.");
-        setConnectionState("disconnected");
+        return;
       }
+
+      // A criação pode terminar antes de o Baileys disponibilizar o QR.
+      // Consulta por alguns segundos antes de mostrar erro ao usuário.
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await wait(1_500);
+        res = await fetchWithTimeout("/api/whatsapp/qr");
+        json = await res.json();
+
+        if (json.error) {
+          throw new Error(json.error);
+        }
+
+        if (json.connected) {
+          setConnectionState("connected");
+          setPhone(json.phone || null);
+          return;
+        }
+
+        if (json.qrcode) {
+          setQrCode(json.qrcode);
+          setConnectionState("qrcode");
+          return;
+        }
+      }
+
+      throw new Error("A nova instância foi criada, mas o QR Code ainda não ficou disponível.");
     } catch (err) {
-      setError("Erro de conexão com o servidor");
+      const message = err instanceof Error && err.name === "AbortError"
+        ? "A Evolution API demorou demais para responder."
+        : err instanceof Error
+          ? err.message
+          : "Erro de conexão com o servidor";
+      setError(message);
       setConnectionState("disconnected");
-      toast.error("Erro de conexão");
+      toast.error(message);
     }
   };
 
@@ -94,16 +146,33 @@ export default function Configuracoes() {
 
   const handleDisconnect = async () => {
     try {
-      const res = await fetch("/api/whatsapp/qr", { method: "DELETE" });
-      if (!res.ok) throw new Error("Erro ao desconectar");
+      const res = await fetchWithTimeout("/api/whatsapp/qr", { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Erro ao desconectar");
+      }
       setConnectionState("disconnected");
       setQrCode(null);
       setPhone(null);
-      toast.success("WhatsApp desconectado com sucesso!");
+      setError(null);
+      toast.success("WhatsApp desconectado e instância antiga removida!");
     } catch (err) {
-      toast.error("Erro ao desconectar o aparelho.");
+      const message = err instanceof Error ? err.message : "Erro ao desconectar o aparelho.";
+      setError(message);
+      toast.error(message);
       console.error(err);
     }
+  };
+
+  const handleSwitchWhatsApp = async () => {
+    const confirmed = window.confirm(
+      "Trocar o WhatsApp removerá a conexão atual e criará um QR Code novo. Deseja continuar?"
+    );
+
+    if (!confirmed) return;
+    setPhone(null);
+    setQrCode(null);
+    await handleConnect();
   };
 
   return (
@@ -188,8 +257,13 @@ export default function Configuracoes() {
                       <p className="text-sm text-muted-foreground font-light mb-8">
                         Clique abaixo para gerar seu código de acesso exclusivo.
                       </p>
+                      {error && (
+                        <p className="text-xs text-red-500 mb-4" role="alert">
+                          {error}
+                        </p>
+                      )}
                       <Button onClick={handleConnect} className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                        Gerar QR Code
+                        Gerar novo QR Code
                       </Button>
                     </div>
                   )}
@@ -242,9 +316,15 @@ export default function Configuracoes() {
                       <p className="text-xs text-muted-foreground font-light mb-8">
                         Minha Clínica
                       </p>
-                      <Button onClick={handleDisconnect} variant="outline" className="w-full h-10 rounded-xl border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-600">
-                        Desconectar Aparelho
-                      </Button>
+                      <div className="w-full space-y-3">
+                        <Button onClick={handleSwitchWhatsApp} className="w-full h-11 rounded-xl gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+                          <RefreshCw className="h-4 w-4" />
+                          Trocar WhatsApp
+                        </Button>
+                        <Button onClick={handleDisconnect} variant="outline" className="w-full h-10 rounded-xl border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-600">
+                          Desconectar e remover instância
+                        </Button>
+                      </div>
                     </div>
                   )}
 
