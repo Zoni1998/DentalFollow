@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, MessageCircle, CheckCircle2, Phone, Calendar, Clock, ShieldCheck, XCircle, Pencil, Save, X, Loader2, Trash2 } from "lucide-react";
-import { ToothIcon } from "@/components/ui/tooth-icon";
+import { TreatmentIcon } from "@/components/ui/treatment-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -290,7 +290,9 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-foreground/80 bg-foreground/5 border border-border px-4 py-1.5 rounded-full text-sm min-w-40">
-                    <ToothIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 ring-1 ring-primary/20">
+                      <TreatmentIcon className="h-4 w-4 text-primary" />
+                    </span>
                     {isEditing ? (
                       <input 
                         value={editData?.treatment || ""}

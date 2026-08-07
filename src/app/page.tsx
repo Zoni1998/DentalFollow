@@ -69,8 +69,8 @@ export default function Dashboard() {
         
         <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-border bg-background/40 backdrop-blur-2xl backdrop-saturate-150 px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
           <div className="flex items-center gap-4">
-            <div className="bg-foreground/5 border border-foreground/10 rounded-xl shadow-[0_0_15px_rgba(255,255,255,0.05)] flex items-center justify-center">
-              <ImageLogo className="w-10 h-10 p-1" />
+            <div className="overflow-hidden rounded-xl border border-primary/25 shadow-[0_0_24px_rgba(139,92,246,0.24)]">
+              <ImageLogo className="w-11 h-11" />
             </div>
             <span className="text-xl font-medium tracking-tight text-foreground">
               DentalFollow.
