@@ -83,10 +83,7 @@ export default function Configuracoes() {
       }
 
       if (json.error) {
-        setError(json.error);
-        setConnectionState("disconnected");
-        toast.error(json.error);
-        return;
+        throw new Error(json.error);
       }
 
       if (json.connected) {
@@ -179,7 +176,7 @@ export default function Configuracoes() {
       setQrCode(null);
       setPhone(null);
       setError(null);
-      toast.success("WhatsApp desconectado e instância antiga removida!");
+      toast.success("WhatsApp antigo desconectado!");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao desconectar o aparelho.";
       setError(message);
@@ -346,7 +343,7 @@ export default function Configuracoes() {
                           Trocar WhatsApp
                         </Button>
                         <Button onClick={handleDisconnect} variant="outline" className="w-full h-10 rounded-xl border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-600">
-                          Desconectar e remover instância
+                          Desconectar WhatsApp
                         </Button>
                       </div>
                     </div>
