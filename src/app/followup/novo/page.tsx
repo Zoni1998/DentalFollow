@@ -259,7 +259,7 @@ export default function NovoFollowup() {
 
               <MotionDiv className="grid gap-6 sm:grid-cols-2">
                  <div className="grid gap-3">
-                  <Label htmlFor="data" className="text-sm font-medium text-foreground/80">Data do Retorno</Label>
+                  <Label htmlFor="data" className="text-sm font-medium text-foreground/80">Data programada para o envio da mensagem</Label>
                   <Input 
                     id="data"
                     name="data"

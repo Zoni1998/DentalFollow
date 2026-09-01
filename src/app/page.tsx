@@ -370,7 +370,7 @@ export default function Dashboard() {
                   <MotionDiv className="flex flex-col items-center gap-4 rounded-2xl py-12 text-center glass-panel">
                     <div>
                       <p className="font-medium text-foreground">Nenhum contato agendado</p>
-                      <p className="mt-1 text-sm text-muted-foreground text-pretty">Cadastre um paciente e escolha uma data de retorno para vê-lo aqui.</p>
+                      <p className="mt-1 text-sm text-muted-foreground text-pretty">Cadastre um paciente e programe a data de envio da mensagem para vê-lo aqui.</p>
                     </div>
                     <Link href="/followup/novo" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
                       <Plus className="size-4" />

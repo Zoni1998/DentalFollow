@@ -283,7 +283,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   {isEditing ? <Input id="consultation-date" type="date" value={editData.consultation_date || ""} onChange={(e) => setEditData({ ...editData, consultation_date: e.target.value })} /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><CalendarDays className="size-4 text-muted-foreground" />{formatDate(consultationDate)}</span></FieldValue>}
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="return-date">Data de retorno</Label>
+                  <Label htmlFor="return-date">Data programada para o envio da mensagem</Label>
                   {isEditing ? <Input id="return-date" type="datetime-local" value={toDateTimeLocal(editData.scheduled_at)} onChange={(e) => setEditData({ ...editData, scheduled_at: new Date(e.target.value).toISOString() })} /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><Clock3 className="size-4 text-muted-foreground" />{formatDateTime(displayData.scheduled_at)}</span></FieldValue>}
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
@@ -347,7 +347,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div><h2 className="text-lg font-semibold text-balance">Mensagens e agendamento</h2><p className="mt-1 text-sm text-muted-foreground text-pretty">Conteúdo, data programada e confirmação dos disparos automáticos.</p></div>
-                <p className="text-xs text-muted-foreground">O envio ocorre automaticamente na data de retorno.</p>
+                <p className="text-xs text-muted-foreground">O envio ocorre automaticamente na data e no horário programados.</p>
               </div>
               {isEditing && <div className="mb-6 grid gap-5 rounded-xl border border-border bg-muted/20 p-4">
                 <div className="grid gap-2"><Label htmlFor="message">Mensagem programada</Label><Textarea id="message" value={editData.message} onChange={(e) => setEditData({ ...editData, message: e.target.value })} className="min-h-32 resize-none" /></div>
