@@ -12,6 +12,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  CalendarDays,
+  List as ListIcon,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,7 +32,7 @@ import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
 import { toast } from "sonner";
-import { formatCurrency, getInitials, formatDate, formatDateTime, getStatusBadgeClass } from "@/lib/format";
+import { formatCurrency, getInitials, formatDate, formatDateTime, formatTime, getStatusBadgeClass } from "@/lib/format";
 import { comparePatientNames } from "@/lib/budget";
 
 interface Followup {
@@ -47,11 +49,35 @@ interface Followup {
 }
 
 const PATIENTS_PER_PAGE = 8;
+const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+type ViewMode = "calendar" | "list";
 
 function getAlphabeticalGroup(name: string) {
   const firstCharacter = name.trim().charAt(0).toLocaleUpperCase("pt-BR");
   const normalized = firstCharacter.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   return /^[A-Z]$/.test(normalized) ? normalized : "#";
+}
+
+function getLocalDateKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getMonthCalendarDays(month: Date) {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstDay = new Date(year, monthIndex, 1);
+  const gridStart = new Date(year, monthIndex, 1 - firstDay.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
 }
 
 export default function FollowUpLista() {
@@ -61,6 +87,11 @@ export default function FollowUpLista() {
   const [followups, setFollowups] = useState<Followup[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [viewMode, setViewMode] = useState<ViewMode>("calendar");
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
 
   const fetchFollowups = useCallback(async () => {
     try {
@@ -120,6 +151,36 @@ export default function FollowUpLista() {
 
     return groups;
   }, []);
+  const calendarDays = getMonthCalendarDays(visibleMonth);
+  const calendarFollowups = filteredFollowups.reduce<Record<string, Followup[]>>(
+    (days, followup) => {
+      if (!followup.scheduled_at) return days;
+      const key = getLocalDateKey(followup.scheduled_at);
+      days[key] = [...(days[key] || []), followup];
+      return days;
+    },
+    {}
+  );
+  const mobileAgendaDays = calendarDays
+    .filter((date) => date.getMonth() === visibleMonth.getMonth())
+    .map((date) => ({ date, followups: calendarFollowups[getLocalDateKey(date)] || [] }))
+    .filter((day) => day.followups.length > 0);
+
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(visibleMonth);
+
+  const changeMonth = (offset: number) => {
+    setVisibleMonth(
+      new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + offset, 1)
+    );
+  };
+
+  const goToCurrentMonth = () => {
+    const today = new Date();
+    setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+  };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -223,6 +284,178 @@ export default function FollowUpLista() {
               </div>
             </div>
 
+            <div className="mb-5 flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-medium text-foreground text-balance">
+                  {viewMode === "calendar" ? "Agenda de mensagens" : "Pacientes em ordem alfabética"}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground text-pretty">
+                  {viewMode === "calendar"
+                    ? "Cada paciente aparece na data e no horário programados para o envio da mensagem."
+                    : "Lista agrupada por inicial, com oito pacientes em cada página."}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2" role="group" aria-label="Modo de visualização">
+                <Button
+                  type="button"
+                  variant={viewMode === "calendar" ? "default" : "outline"}
+                  onClick={() => setViewMode("calendar")}
+                >
+                  <CalendarDays className="size-4" />
+                  Agenda
+                </Button>
+                <Button
+                  type="button"
+                  variant={viewMode === "list" ? "default" : "outline"}
+                  onClick={() => setViewMode("list")}
+                >
+                  <ListIcon className="size-4" />
+                  Lista A–Z
+                </Button>
+              </div>
+            </div>
+
+            {viewMode === "calendar" ? (
+              <div className="grid gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={goToCurrentMonth}>
+                      Hoje
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Mês anterior"
+                      onClick={() => changeMonth(-1)}
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Próximo mês"
+                      onClick={() => changeMonth(1)}
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
+                  <h3 className="text-lg font-medium capitalize text-foreground text-balance">
+                    {monthLabel}
+                  </h3>
+                </div>
+
+                <div className="hidden overflow-hidden rounded-xl border border-border bg-card md:block">
+                  <div className="grid grid-cols-7 border-b border-border bg-muted/40">
+                    {WEEK_DAYS.map((day) => (
+                      <div key={day} className="px-2 py-3 text-center text-xs font-medium uppercase text-muted-foreground">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7">
+                    {calendarDays.map((date) => {
+                      const dateKey = getLocalDateKey(date);
+                      const dayFollowups = calendarFollowups[dateKey] || [];
+                      const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
+                      const isToday = date.toDateString() === new Date().toDateString();
+
+                      return (
+                        <div
+                          key={dateKey}
+                          className={cn(
+                            "min-h-32 border-b border-r border-border p-2 last:border-r-0",
+                            !isCurrentMonth && "bg-muted/20 text-muted-foreground"
+                          )}
+                        >
+                          <time
+                            dateTime={dateKey}
+                            className={cn(
+                              "mb-2 flex size-7 items-center justify-center rounded-full text-xs font-medium tabular-nums",
+                              isToday && "bg-primary text-primary-foreground"
+                            )}
+                          >
+                            {date.getDate()}
+                          </time>
+                          <div className="grid gap-1">
+                            {dayFollowups.slice(0, 3).map((followup) => {
+                              const patient = followup.patients;
+                              if (!patient) return null;
+
+                              return (
+                                <Link
+                                  key={followup.id}
+                                  href={`/followup/${followup.id}`}
+                                  aria-label={`${formatTime(followup.scheduled_at)} — ${patient.name}`}
+                                  className="flex min-w-0 items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-2 py-1.5 text-xs text-foreground hover:bg-primary/20"
+                                >
+                                  <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                                  <span className="shrink-0 font-medium tabular-nums">{formatTime(followup.scheduled_at)}</span>
+                                  <span className="truncate">{patient.name}</span>
+                                </Link>
+                              );
+                            })}
+                            {dayFollowups.length > 3 && (
+                              <span className="px-2 text-xs text-muted-foreground tabular-nums">
+                                +{dayFollowups.length - 3} contatos
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:hidden">
+                  {mobileAgendaDays.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border px-5 py-10 text-center">
+                      <p className="font-medium text-foreground">Nenhuma mensagem neste mês</p>
+                      <p className="mt-1 text-sm text-muted-foreground text-pretty">
+                        Navegue para outro mês ou altere os filtros acima.
+                      </p>
+                    </div>
+                  ) : (
+                    mobileAgendaDays.map(({ date, followups: dayFollowups }) => (
+                      <section key={getLocalDateKey(date)} className="grid gap-2">
+                        <h3 className="text-sm font-medium capitalize text-muted-foreground tabular-nums">
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            weekday: "long",
+                            day: "2-digit",
+                            month: "long",
+                          }).format(date)}
+                        </h3>
+                        {dayFollowups.map((followup) => {
+                          const patient = followup.patients;
+                          if (!patient) return null;
+
+                          return (
+                            <Link
+                              key={followup.id}
+                              href={`/followup/${followup.id}`}
+                              className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-foreground">{patient.name}</p>
+                                <p className="mt-1 truncate text-sm text-muted-foreground">{followup.treatment}</p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="font-medium text-foreground tabular-nums">{formatTime(followup.scheduled_at)}</p>
+                                <Badge variant="outline" className={cn("mt-1 font-normal", getStatusBadgeClass(followup.status))}>
+                                  {followup.status}
+                                </Badge>
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </section>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
             <div className="mt-0 outline-none">
               <StaggerDiv className="grid gap-3">
                 
@@ -365,6 +598,7 @@ export default function FollowUpLista() {
                 </nav>
               )}
             </div>
+            )}
           </Tabs>
 
         </main>
