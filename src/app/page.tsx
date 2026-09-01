@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Users, ArrowUpRight, Clock, Settings, Loader2 } from "lucide-react";
+import { Plus, Users, ArrowUpRight, Clock, Settings, Loader2, Smartphone } from "lucide-react";
 import { ImageLogo } from "@/components/ui/image-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -32,9 +32,100 @@ interface DashboardData {
   }>;
 }
 
+type WhatsAppConnectionState = "loading" | "connected" | "disconnected" | "unavailable";
+
+interface WhatsAppConnectionStatus {
+  state: WhatsAppConnectionState;
+  phone: string | null;
+}
+
+function formatWhatsAppNumber(value: string | null) {
+  if (!value) return "Nenhum número conectado";
+
+  const digits = value.replace(/\D/g, "");
+
+  if (digits.length === 13 && digits.startsWith("55")) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith("55")) {
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+  }
+
+  return value;
+}
+
+function WhatsAppConnectionCard({
+  status,
+  className,
+}: {
+  status: WhatsAppConnectionStatus;
+  className?: string;
+}) {
+  const isConnected = status.state === "connected";
+  const statusLabel = {
+    loading: "Verificando conexão",
+    connected: "Conectado",
+    disconnected: "Desconectado",
+    unavailable: "Status indisponível",
+  }[status.state];
+  const numberLabel = isConnected
+    ? formatWhatsAppNumber(status.phone)
+    : status.state === "disconnected"
+      ? "Nenhum número conectado"
+      : "WhatsApp";
+
+  return (
+    <Link
+      href="/configuracoes"
+      aria-label={`${numberLabel}. ${statusLabel}. Abrir configurações do WhatsApp`}
+      className={cn(
+        "flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 shadow-sm transition-colors hover:bg-muted/50",
+        className
+      )}
+    >
+      <div
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-full",
+          isConnected
+            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            : "bg-muted text-muted-foreground"
+        )}
+      >
+        <Smartphone className="size-4" aria-hidden="true" />
+      </div>
+      <div className="min-w-0 text-left">
+        <p className="max-w-56 truncate text-sm font-medium tabular-nums">{numberLabel}</p>
+        <p
+          aria-live="polite"
+          className={cn(
+            "flex items-center gap-1.5 text-xs",
+            isConnected
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-muted-foreground"
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-2 rounded-full",
+              isConnected ? "bg-emerald-500" : "bg-muted-foreground/50"
+            )}
+          />
+          {statusLabel}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [whatsAppStatus, setWhatsAppStatus] = useState<WhatsAppConnectionStatus>({
+    state: "loading",
+    phone: null,
+  });
 
   const fetchData = useCallback(async () => {
     try {
@@ -49,13 +140,35 @@ export default function Dashboard() {
     }
   }, []);
 
+  const fetchWhatsAppStatus = useCallback(async () => {
+    try {
+      const response = await fetch("/api/whatsapp/qr", { cache: "no-store" });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setWhatsAppStatus({ state: "unavailable", phone: null });
+        return;
+      }
+
+      setWhatsAppStatus({
+        state: result.connected ? "connected" : "disconnected",
+        phone: result.connected ? result.phone ?? null : null,
+      });
+    } catch (error) {
+      console.error("Erro ao verificar conexão do WhatsApp:", error);
+      setWhatsAppStatus({ state: "unavailable", phone: null });
+    }
+  }, []);
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
-  }, [fetchData]);
+    fetchWhatsAppStatus();
+  }, [fetchData, fetchWhatsAppStatus]);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-dvh items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -64,7 +177,7 @@ export default function Dashboard() {
   const d = data || { totalOpen: 0, todayCount: 0, conversionRate: 0, conversionDiff: 0, upcoming: [] };
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-transparent overflow-x-hidden">
+    <div className="flex min-h-dvh w-full flex-col bg-transparent overflow-x-hidden">
       <div className="flex flex-col sm:gap-8 sm:py-8 sm:pl-14 max-w-6xl mx-auto w-full">
         
         <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-border bg-background/40 backdrop-blur-2xl backdrop-saturate-150 px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
@@ -78,6 +191,7 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center gap-4">
+            <WhatsAppConnectionCard status={whatsAppStatus} className="hidden md:flex" />
             <ThemeToggle />
             <Link 
               href="/configuracoes"
@@ -97,6 +211,7 @@ export default function Dashboard() {
         </header>
 
         <main className="grid flex-1 items-start gap-8 p-6 sm:px-6 sm:py-4 md:gap-12">
+          <WhatsAppConnectionCard status={whatsAppStatus} className="w-full md:hidden" />
           
           <StaggerDiv className="grid gap-8 md:gap-12 w-full">
             <MotionDiv>
@@ -249,3 +364,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
