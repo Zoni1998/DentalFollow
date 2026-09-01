@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback, useRef, use } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -36,6 +36,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
   const [sending, setSending] = useState(false);
   const [editData, setEditData] = useState<FollowupDetail | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const sendLockRef = useRef(false);
   const router = useRouter();
 
   const fetchFup = useCallback(async () => {
@@ -89,7 +90,9 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
   };
 
   const handleSendWhatsApp = async () => {
-    if (!fup) return;
+    // useRef bloqueia cliques simultâneos antes mesmo do próximo render.
+    if (!fup || sendLockRef.current) return;
+    sendLockRef.current = true;
     setSending(true);
     try {
       const res = await fetch("/api/whatsapp/send", {
@@ -112,6 +115,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
       toast.error("Erro ao enviar mensagem");
       console.error(err);
     } finally {
+      sendLockRef.current = false;
       setSending(false);
     }
   };
@@ -410,18 +414,24 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
 
               <div className="mt-10">
                 <Button 
-                  disabled={isEditing || sending}
+                  disabled={isEditing || sending || fup.status === "Enviado"}
                   onClick={handleSendWhatsApp}
                   className="w-full sm:w-auto h-14 rounded-full px-8 shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] transition-all gap-3 text-base font-medium bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:shadow-none"
                 >
                   {sending ? (
                     <><Loader2 className="h-5 w-5 animate-spin" /> Enviando...</>
+                  ) : fup.status === "Enviado" ? (
+                    <><CheckCircle2 className="h-5 w-5" /> Mensagem já enviada</>
                   ) : (
                     <><MessageCircle className="h-5 w-5" /> Enviar WhatsApp Agora</>
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground/80 mt-4 font-light text-center sm:text-left">
-                  {isEditing ? "Salve as alterações para habilitar o envio." : "Envia a mensagem via Evolution API diretamente para o WhatsApp do paciente."}
+                  {isEditing
+                    ? "Salve as alterações para habilitar o envio."
+                    : fup.status === "Enviado"
+                      ? "Este follow-up já foi enviado e não será disparado novamente."
+                      : "Envia a mensagem via Evolution API diretamente para o WhatsApp do paciente."}
                 </p>
               </div>
             </MotionDiv>
