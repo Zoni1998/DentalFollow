@@ -1,19 +1,34 @@
 "use client";
 
+import { AlertDialog } from "@base-ui/react/alert-dialog";
+import {
+  ArrowLeft, CalendarDays, CheckCircle2, Clock3, FileText, Flame,
+  IdCard, Loader2, MapPin, MessageCircle, Pencil, Phone, Save,
+  Snowflake, Trash2, UserRound, X, XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, MessageCircle, CheckCircle2, Phone, Calendar, Clock, ShieldCheck, XCircle, Pencil, Save, X, Loader2, Trash2 } from "lucide-react";
-import { TreatmentIcon } from "@/components/ui/treatment-icon";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
-import { useState, useEffect, useCallback, useRef, use } from "react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { use, useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { formatCurrency, formatDate, formatTime, getStatusBadgeClass } from "@/lib/format";
+
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { getBudgetTemperature, getDaysSinceConsultation } from "@/lib/budget";
+import { formatCpf, formatCurrency, formatDate, formatDateTime, getStatusBadgeClass } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+interface PatientProfile {
+  id: string;
+  name: string;
+  phone: string;
+  cpf: string | null;
+  address: string | null;
+}
 
 interface FollowupDetail {
   id: string;
@@ -22,52 +37,91 @@ interface FollowupDetail {
   amount: number;
   message: string;
   scheduled_at: string;
+  sent_at: string | null;
   status: string;
   lost_reason: string | null;
   created_at: string;
-  patients: { id: string; name: string; phone: string } | null;
+  updated_at: string;
+  patients: PatientProfile | null;
+}
+
+interface MessageHistoryItem {
+  id: string;
+  message: string;
+  scheduled_at: string;
+  sent_at: string | null;
+  status: string;
+  updated_at: string;
+}
+
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function FieldValue({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-11 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-sm text-foreground">
+      {children || "â€”"}
+    </div>
+  );
 }
 
 export default function FichaPaciente({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
+  const { id } = use(params);
+  const router = useRouter();
   const [fup, setFup] = useState<FollowupDetail | null>(null);
+  const [messages, setMessages] = useState<MessageHistoryItem[]>([]);
+  const [editData, setEditData] = useState<FollowupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [editData, setEditData] = useState<FollowupDetail | null>(null);
+  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const sendLockRef = useRef(false);
-  const router = useRouter();
 
   const fetchFup = useCallback(async () => {
     try {
-      const res = await fetch(`/api/followups/${resolvedParams.id}`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const json = await res.json();
-      setFup(json.followup);
-      setEditData(json.followup);
-    } catch (err) {
-      console.error("Erro ao carregar ficha:", err);
+      const response = await fetch(`/api/followups/${id}`);
+      if (!response.ok) throw new Error("Falha ao carregar a ficha");
+      const data = await response.json();
+      setFup(data.followup);
+      setEditData(data.followup);
+      setMessages(data.messages || []);
+    } catch (error) {
+      console.error("Erro ao carregar ficha:", error);
       toast.error("Erro ao carregar dados do paciente");
     } finally {
       setLoading(false);
     }
-  }, [resolvedParams.id]);
+  }, [id]);
 
   useEffect(() => {
+    // Esta chamada sincroniza a pÃ¡gina cliente com a API ao trocar o id da rota.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFup();
   }, [fetchFup]);
 
+  const updatePatient = (field: keyof PatientProfile, value: string) => {
+    setEditData((current) => current?.patients ? {
+      ...current,
+      patients: { ...current.patients, [field]: value },
+    } : current);
+  };
+
   const handleSave = async () => {
     if (!editData) return;
+    setSaving(true);
     try {
-      const res = await fetch("/api/patients", {
+      const response = await fetch("/api/patients", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           followup_id: editData.id,
           patient_name: editData.patients?.name,
           patient_phone: editData.patients?.phone,
+          patient_cpf: editData.patients?.cpf,
+          patient_address: editData.patients?.address,
           treatment: editData.treatment,
           amount: editData.amount,
           message: editData.message,
@@ -77,403 +131,244 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
           lost_reason: editData.lost_reason,
         }),
       });
-
-      if (!res.ok) throw new Error("Falha ao salvar");
-
-      toast.success("Informações do paciente atualizadas!");
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Falha ao salvar");
+      await fetchFup();
       setIsEditing(false);
-      setFup(editData);
-    } catch (err) {
-      toast.error("Erro ao salvar alterações");
-      console.error(err);
-    }
-  };
-
-  const handleSendWhatsApp = async () => {
-    // useRef bloqueia cliques simultâneos antes mesmo do próximo render.
-    if (!fup || sendLockRef.current) return;
-    sendLockRef.current = true;
-    setSending(true);
-    try {
-      const res = await fetch("/api/whatsapp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ followup_id: fup.id }),
-      });
-      const json = await res.json();
-
-      if (res.ok && json.success) {
-        toast.success("Mensagem enviada via WhatsApp! 📱");
-        // Atualiza status localmente
-        setFup((prev) => prev ? { ...prev, status: "Enviado" } : prev);
-      } else if (json.mock) {
-        toast.info("Evolution API não configurada — modo simulação ativo");
-      } else {
-        toast.error("Erro ao enviar: " + (json.error || "desconhecido"));
-      }
-    } catch (err) {
-      toast.error("Erro ao enviar mensagem");
-      console.error(err);
+      toast.success("InformaÃ§Ãµes do paciente atualizadas!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar alteraÃ§Ãµes");
     } finally {
-      sendLockRef.current = false;
-      setSending(false);
+      setSaving(false);
     }
   };
 
-  const handleStatusChange = async (newStatus: string, lostReason?: string) => {
+  const handleStatusChange = async (status: string, lostReason?: string) => {
     if (!fup) return;
     try {
-      const res = await fetch("/api/patients", {
+      const response = await fetch("/api/patients", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          followup_id: fup.id,
-          status: newStatus,
-          lost_reason: lostReason || null,
-        }),
+        body: JSON.stringify({ followup_id: fup.id, status, lost_reason: lostReason || null }),
       });
-
-      if (!res.ok) throw new Error("Falha ao atualizar");
-
-      toast.success(
-        newStatus === "Fechado" ? "Paciente marcado como Fechado! 🎉" :
-        newStatus === "Perdido" ? "Marcado como Perdido." :
-        "Status atualizado!"
-      );
-
-      setFup((prev) => prev ? { ...prev, status: newStatus, lost_reason: lostReason || null } : prev);
-    } catch (err) {
-      toast.error("Erro ao atualizar status");
+      if (!response.ok) throw new Error("Falha ao atualizar o status");
+      await fetchFup();
+      toast.success(status === "Fechado" ? "OrÃ§amento fechado!" : "OrÃ§amento marcado como perdido.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao atualizar status");
     }
   };
 
   const handleDelete = async () => {
-    if (!fup || !confirm("Tem certeza que deseja apagar permanentemente esta ficha de paciente?")) return;
+    if (!fup) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/followups/${fup.id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Falha ao apagar");
-      toast.success("Ficha do paciente apagada com sucesso!");
+      const response = await fetch(`/api/followups/${fup.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Falha ao apagar a ficha");
+      toast.success("Ficha apagada com sucesso!");
       router.push("/orcamentos");
-    } catch (err) {
-      toast.error("Erro ao apagar ficha");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao apagar ficha");
       setDeleting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex min-h-dvh items-center justify-center" role="status" aria-label="Carregando ficha do paciente">
+      <Loader2 className="size-8 animate-spin text-primary" />
+    </div>
+  );
 
-  if (!fup) {
-    return (
-      <div className="flex min-h-screen items-center justify-center flex-col gap-4">
-        <p className="text-muted-foreground">Paciente não encontrado.</p>
-        <Link href="/followup/lista" className={cn(buttonVariants({ variant: "outline" }), "rounded-full")}>
-          Voltar para a lista
-        </Link>
+  if (!fup || !editData) return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
+      <UserRound className="size-10 text-muted-foreground" />
+      <div>
+        <h1 className="text-xl font-semibold text-balance">Paciente nÃ£o encontrado</h1>
+        <p className="mt-1 text-sm text-muted-foreground text-pretty">A ficha pode ter sido removida ou o link estÃ¡ incorreto.</p>
       </div>
-    );
-  }
+      <Link href="/followup/lista" className={buttonVariants({ variant: "outline" })}>Voltar para a lista</Link>
+    </div>
+  );
 
-  const patient = fup.patients;
-  const displayData = isEditing ? editData! : fup;
+  const displayData = isEditing ? editData : fup;
+  const patient = displayData.patients;
+  const consultationDate = displayData.consultation_date || displayData.created_at;
+  const temperature = getBudgetTemperature(consultationDate);
+  const daysSinceConsultation = getDaysSinceConsultation(consultationDate);
+  const isHot = temperature === "Quente";
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-transparent">
-      <div className="flex flex-col sm:gap-8 sm:py-8 sm:pl-14 max-w-5xl mx-auto w-full">
-        
-        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/40 backdrop-blur-2xl backdrop-saturate-150 px-6 sm:static sm:h-auto sm:border-0 sm:bg-transparent">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-4">
-              <Link 
-                href="/followup/lista"
-                className="flex items-center justify-center h-10 w-10 rounded-full bg-foreground/5 border border-border hover:bg-foreground/10 transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4 text-foreground/80" />
-                <span className="sr-only">Voltar para a Lista</span>
-              </Link>
-              <h1 className="text-2xl font-medium tracking-tight text-foreground">
-                Ficha do Paciente
-              </h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-full"
-                onClick={handleDelete}
-                disabled={deleting}
-                title="Apagar ficha"
-              >
-                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
+    <div className="min-h-dvh bg-background">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-10">
+        <header className="flex flex-col gap-5 border-b border-border pb-6">
+          <div className="flex items-center justify-between gap-4">
+            <Link href="/followup/lista" aria-label="Voltar para a lista de pacientes" className={buttonVariants({ variant: "outline", size: "icon" })}>
+              <ArrowLeft className="size-4" />
+            </Link>
+            <div className="flex items-center gap-2">
+              <AlertDialog.Root>
+                <AlertDialog.Trigger aria-label="Apagar ficha do paciente" className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "text-destructive hover:bg-destructive/10 hover:text-destructive")}>
+                  <Trash2 className="size-4" />
+                </AlertDialog.Trigger>
+                <AlertDialog.Portal>
+                  <AlertDialog.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-black/50" />
+                  <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-2xl border border-border bg-background p-6 shadow-xl">
+                    <div>
+                      <AlertDialog.Title className="text-lg font-semibold text-balance">Apagar esta ficha?</AlertDialog.Title>
+                      <AlertDialog.Description className="mt-2 text-sm text-muted-foreground text-pretty">O cadastro, o orÃ§amento e o histÃ³rico deste paciente serÃ£o removidos permanentemente.</AlertDialog.Description>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <AlertDialog.Close className={buttonVariants({ variant: "outline" })}>Cancelar</AlertDialog.Close>
+                      <button type="button" onClick={handleDelete} disabled={deleting} className={buttonVariants({ variant: "destructive" })}>
+                        {deleting && <Loader2 className="size-4 animate-spin" />} Apagar ficha
+                      </button>
+                    </div>
+                  </AlertDialog.Popup>
+                </AlertDialog.Portal>
+              </AlertDialog.Root>
               <ThemeToggle />
-              {isEditing ? (
-                <>
-                  <Button variant="ghost" size="icon" onClick={() => { setEditData(fup); setIsEditing(false); }} className="rounded-full">
-                    <X className="h-4 w-4" />
-                  </Button>
-                  <Button onClick={handleSave} className="rounded-full gap-2 shadow-[0_0_15px_rgba(139,92,246,0.3)] bg-primary text-primary-foreground hover:bg-primary/90">
-                    <Save className="h-4 w-4" />
-                    Salvar
-                  </Button>
-                </>
-              ) : (
-                <Button variant="outline" onClick={() => setIsEditing(true)} className="rounded-full gap-2 bg-foreground/5 border-border hover:bg-foreground/10 text-foreground">
-                  <Pencil className="h-4 w-4" />
-                  Editar
+              {isEditing ? <>
+                <Button variant="outline" onClick={() => { setEditData(fup); setIsEditing(false); }} disabled={saving}><X className="size-4" />Cancelar</Button>
+                <Button onClick={handleSave} disabled={saving} className="shadow-none hover:shadow-none">
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Salvar
                 </Button>
+              </> : (
+                <Button variant="outline" onClick={() => setIsEditing(true)}><Pencil className="size-4" />Editar</Button>
               )}
-              <ThemeToggle />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex size-14 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-xl font-semibold">{patient?.name?.charAt(0)?.toUpperCase() || "?"}</div>
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground">Ficha do paciente</p>
+                <h1 className="truncate text-2xl font-semibold text-balance sm:text-3xl">{patient?.name || "Sem nome"}</h1>
+                <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><Phone className="size-4" />{patient?.phone || "Telefone nÃ£o informado"}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className={cn("px-3 py-1", getStatusBadgeClass(displayData.status))}>{displayData.status}</Badge>
+              <Badge variant="outline" className={cn("gap-1.5 px-3 py-1", isHot ? "border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400" : "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400")}>
+                {isHot ? <Flame className="size-3.5" /> : <Snowflake className="size-3.5" />}{temperature} Â· {daysSinceConsultation} {daysSinceConsultation === 1 ? "dia" : "dias"}
+              </Badge>
             </div>
           </div>
         </header>
 
-        <main className="grid flex-1 items-start gap-8 p-6 sm:px-6 sm:py-0">
-          
-          <StaggerDiv className="grid gap-8 w-full">
-          {/* Card Principal: Perfil e Resumo */}
-          <MotionDiv className="glass-panel p-6 sm:p-10 rounded-3xl flex flex-col md:flex-row gap-8 items-start relative overflow-hidden transition-all duration-300">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full -mr-20 -mt-20 pointer-events-none" />
-            
-            <div className="flex flex-col items-center gap-4">
-              <div className={cn("h-28 w-28 rounded-full flex items-center justify-center font-medium text-4xl shadow-[0_0_20px_rgba(255,255,255,0.05)] ring-4 ring-foreground/5 bg-foreground/5 border border-foreground/10 text-foreground")}>
-                {patient?.name?.charAt(0)?.toUpperCase() || "?"}
-              </div>
-              {isEditing ? (
-                <select 
-                  value={editData!.status} 
-                  onChange={e => {
-                    const newStatus = e.target.value;
-                    setEditData(prev => prev ? { ...prev, status: newStatus, lost_reason: newStatus !== 'Perdido' ? null : prev.lost_reason } : prev);
-                  }}
-                  className={cn("mt-1 py-1.5 px-4 rounded-full text-sm outline-none border focus:ring-2 focus:ring-primary bg-background", getStatusBadgeClass(new Date().toISOString() ? editData!.status : "Pendente"))}
-                >
-                  <option className="bg-background text-foreground" value="Pendente">Pendente</option>
-                  <option className="bg-background text-foreground" value="Enviado">Enviado</option>
-                  <option className="bg-background text-foreground" value="Fechado">Fechado</option>
-                  <option className="bg-background text-foreground" value="Perdido">Perdido</option>
-                </select>
-              ) : (
-                <Badge variant="outline" className={cn("mt-1 py-1.5 px-4 font-normal", getStatusBadgeClass(displayData.status))}>
-                  {displayData.status}
-                </Badge>
-              )}
-            </div>
+        <Tabs defaultValue="orcamento" className="w-full gap-6">
+          <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b border-border px-0 pb-1">
+            <TabsTrigger value="orcamento" className="min-h-10 flex-none gap-2 px-4"><FileText className="size-4" />OrÃ§amento</TabsTrigger>
+            <TabsTrigger value="cadastro" className="min-h-10 flex-none gap-2 px-4"><IdCard className="size-4" />Cadastro</TabsTrigger>
+            <TabsTrigger value="mensagens" className="min-h-10 flex-none gap-2 px-4"><MessageCircle className="size-4" />Mensagens enviadas</TabsTrigger>
+          </TabsList>
 
-            <div className="flex-1 grid gap-8 relative z-10 w-full mt-2">
-              <div>
-                {isEditing ? (
-                  <Input 
-                    value={editData?.patients?.name || ""}
-                    onChange={e => setEditData(prev => prev ? { ...prev, patients: { ...prev.patients!, name: e.target.value } } : prev)}
-                    className="text-4xl font-light h-14 bg-foreground/5 border-border focus-visible:ring-primary w-full max-w-sm"
-                  />
-                ) : (
-                  <h2 className="text-4xl font-light tracking-tight text-foreground">{patient?.name}</h2>
-                )}
-                
-                <div className="flex flex-wrap items-center gap-4 mt-4">
-                  <div className="flex items-center gap-2 text-foreground/80 bg-foreground/5 border border-border px-4 py-1.5 rounded-full text-sm min-w-40">
-                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                    {isEditing ? (
-                      <input 
-                        value={editData?.patients?.phone || ""}
-                        onChange={e => setEditData(prev => prev ? { ...prev, patients: { ...prev.patients!, phone: e.target.value } } : prev)}
-                        className="bg-transparent border-none outline-none w-full text-foreground/80 placeholder:text-muted-foreground"
-                      />
-                    ) : (
-                      patient?.phone
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-foreground/80 bg-foreground/5 border border-border px-4 py-1.5 rounded-full text-sm min-w-40">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 ring-1 ring-primary/20">
-                      <TreatmentIcon className="h-4 w-4 text-primary" />
-                    </span>
-                    {isEditing ? (
-                      <input 
-                        value={editData?.treatment || ""}
-                        onChange={e => setEditData(prev => prev ? { ...prev, treatment: e.target.value } : prev)}
-                        className="bg-transparent border-none outline-none w-full text-foreground/80 placeholder:text-muted-foreground"
-                      />
-                    ) : (
-                      displayData.treatment
-                    )}
-                  </div>
-                </div>
+          <TabsContent value="orcamento" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-balance">Dados do orÃ§amento</h2>
+                <p className="mt-1 text-sm text-muted-foreground text-pretty">Tratamento, valor e datas que definem a prioridade do contato.</p>
               </div>
-
-              <div className="grid sm:grid-cols-3 gap-6 pt-6 border-t border-border">
-                <div>
-                  <span className="text-sm font-light text-muted-foreground block mb-1">Valor na Mesa</span>
-                  {isEditing ? (
-                    <Input 
-                      value={editData?.amount?.toString() || "0"}
-                      onChange={e => setEditData(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : prev)}
-                      className="text-2xl font-light h-12 bg-foreground/5 border-border focus-visible:ring-primary w-full max-w-40"
-                    />
-                  ) : (
-                    <span className="text-3xl font-light text-foreground">{formatCurrency(displayData.amount)}</span>
-                  )}
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="treatment">Tratamento de interesse</Label>
+                  {isEditing ? <Input id="treatment" value={editData.treatment} onChange={(e) => setEditData({ ...editData, treatment: e.target.value })} /> : <FieldValue>{displayData.treatment}</FieldValue>}
                 </div>
-                <div>
-                  <span className="text-sm font-light text-muted-foreground block mb-2">Data do Atendimento</span>
-                  {isEditing ? (
-                    <Input
-                      type="date"
-                      value={editData?.consultation_date || ""}
-                      onChange={e => setEditData(prev => prev ? { ...prev, consultation_date: e.target.value } : prev)}
-                      className="h-10 bg-foreground/5 border-border focus-visible:ring-primary [color-scheme:dark]"
-                    />
-                  ) : (
-                    <div className="flex items-center gap-2 bg-foreground/5 border border-border rounded-lg px-3 py-1.5 w-fit">
-                      <Calendar className="h-4 w-4 text-primary shrink-0" />
-                      <span className="font-light">{formatDate(displayData.consultation_date || displayData.created_at)}</span>
-                    </div>
-                  )}
+                <div className="grid gap-2">
+                  <Label htmlFor="amount">Valor do orÃ§amento</Label>
+                  {isEditing ? <Input id="amount" type="number" min="0" step="0.01" value={editData.amount} onChange={(e) => setEditData({ ...editData, amount: Number(e.target.value) || 0 })} /> : <FieldValue><span className="font-medium tabular-nums">{formatCurrency(displayData.amount)}</span></FieldValue>}
                 </div>
-                <div>
-                  <span className="text-sm font-light text-muted-foreground block mb-2">Data Programada</span>
-                  <div className="flex items-center gap-4 text-foreground font-medium">
-                    <div className="flex items-center gap-2 bg-foreground/5 border border-border rounded-lg px-3 py-1.5">
-                      <Calendar className="h-4 w-4 text-primary shrink-0" /> 
-                      <span className="font-light">{formatDate(displayData.scheduled_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 bg-foreground/5 border border-border rounded-lg px-3 py-1.5">
-                      <Clock className="h-4 w-4 text-primary shrink-0" /> 
-                      <span className="font-light">{formatTime(displayData.scheduled_at)}</span>
-                    </div>
-                  </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="consultation-date">Data do atendimento</Label>
+                  {isEditing ? <Input id="consultation-date" type="date" value={editData.consultation_date || ""} onChange={(e) => setEditData({ ...editData, consultation_date: e.target.value })} /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><CalendarDays className="size-4 text-muted-foreground" />{formatDate(consultationDate)}</span></FieldValue>}
                 </div>
-              </div>
-              
-              {displayData.status === 'Perdido' && (
-                <MotionDiv 
-                  initial={{ opacity: 0, height: 0 }} 
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="pt-6 border-t border-destructive/20"
-                >
-                  <span className="text-sm font-medium text-destructive block mb-2 flex items-center gap-2">
-                    <XCircle className="h-4 w-4" /> Motivo da Perda
-                  </span>
+                <div className="grid gap-2">
+                  <Label htmlFor="return-date">Data de retorno</Label>
+                  {isEditing ? <Input id="return-date" type="datetime-local" value={toDateTimeLocal(editData.scheduled_at)} onChange={(e) => setEditData({ ...editData, scheduled_at: new Date(e.target.value).toISOString() })} /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><Clock3 className="size-4 text-muted-foreground" />{formatDateTime(displayData.scheduled_at)}</span></FieldValue>}
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="status">SituaÃ§Ã£o do orÃ§amento</Label>
                   {isEditing ? (
-                    <select 
-                      value={editData?.lost_reason || ""} 
-                      onChange={e => setEditData(prev => prev ? { ...prev, lost_reason: e.target.value } : prev)}
-                      className="bg-foreground/5 border border-border text-foreground text-sm rounded-lg outline-none focus:ring-2 focus:ring-destructive w-full max-w-sm p-2.5"
-                    >
-                      <option className="bg-background text-foreground" value="" disabled>Selecione um motivo...</option>
-                      <option className="bg-background text-foreground" value="Preço muito alto">Preço muito alto</option>
-                      <option className="bg-background text-foreground" value="Fechou com concorrente">Fechou com concorrente</option>
-                      <option className="bg-background text-foreground" value="Sumiu (Ghosting)">Sumiu (Ghosting)</option>
-                      <option className="bg-background text-foreground" value="Decidiu adiar">Decidiu adiar o tratamento</option>
-                      <option className="bg-background text-foreground" value="Outro">Outro motivo</option>
+                    <select id="status" value={editData.status} onChange={(e) => { const status = e.target.value; setEditData({ ...editData, status, lost_reason: status === "Perdido" ? editData.lost_reason : null }); }} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                      <option value="Pendente">Pendente</option><option value="Enviado">Enviado</option><option value="Fechado">Fechado</option><option value="Perdido">Perdido</option>
                     </select>
-                  ) : (
-                    <span className="text-foreground/80 font-light">{displayData.lost_reason || "Motivo não informado"}</span>
-                  )}
-                </MotionDiv>
-              )}
+                  ) : <FieldValue>{displayData.status}</FieldValue>}
+                </div>
+                {displayData.status === "Perdido" && <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="lost-reason">Motivo da perda</Label>
+                  {isEditing ? <Input id="lost-reason" value={editData.lost_reason || ""} onChange={(e) => setEditData({ ...editData, lost_reason: e.target.value })} /> : <FieldValue>{displayData.lost_reason || "Motivo nÃ£o informado"}</FieldValue>}
+                </div>}
+              </div>
+            </section>
 
-            </div>
-          </MotionDiv>
-
-          {/* Area do Quebra Gelo / Ação */}
-          <div className="grid md:grid-cols-[1fr_320px] gap-8">
-            
-            <MotionDiv className="bg-foreground/[0.02] border border-border rounded-3xl p-6 sm:p-10 transition-all duration-300 hover:bg-foreground/[0.03]">
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <MessageCircle className="h-5 w-5 text-primary" />
-                  <h3 className="text-xl font-light tracking-tight text-foreground">Mensagem Inicial</h3>
+            <aside className="flex flex-col gap-4">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <p className="text-sm font-medium">Temperatura</p>
+                <div className="mt-3 flex items-center gap-3">
+                  <div className={cn("flex size-10 items-center justify-center rounded-full", isHot ? "bg-orange-500/10 text-orange-600" : "bg-sky-500/10 text-sky-600")}>{isHot ? <Flame className="size-5" /> : <Snowflake className="size-5" />}</div>
+                  <div><p className="font-semibold">OrÃ§amento {temperature.toLowerCase()}</p><p className="text-xs text-muted-foreground">{isHot ? "Atendido hÃ¡ atÃ© 3 dias" : "Atendido hÃ¡ mais de 3 dias"}</p></div>
                 </div>
               </div>
-              
-              {/* Chat Bubble Simulation */}
-              <div className="glass-panel p-6 rounded-2xl rounded-tl-sm text-foreground/80 font-light leading-relaxed relative">
-                {isEditing ? (
-                  <Textarea 
-                    value={editData?.message || ""}
-                    onChange={e => setEditData(prev => prev ? { ...prev, message: e.target.value } : prev)}
-                    className="min-h-[150px] bg-foreground/5 border-border text-foreground font-light resize-none focus-visible:ring-primary p-4"
-                  />
-                ) : (
-                  <>
-                    {displayData.message || "Nenhuma mensagem cadastrada."}
-                    <div className="absolute right-4 bottom-3 text-[10px] text-muted-foreground/80 font-medium">{formatTime(displayData.scheduled_at)}</div>
-                  </>
-                )}
-              </div>
-
-              <div className="mt-10">
-                <Button 
-                  disabled={isEditing || sending || fup.status === "Enviado"}
-                  onClick={handleSendWhatsApp}
-                  className="w-full sm:w-auto h-14 rounded-full px-8 shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_30px_rgba(139,92,246,0.5)] transition-all gap-3 text-base font-medium bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:shadow-none"
-                >
-                  {sending ? (
-                    <><Loader2 className="h-5 w-5 animate-spin" /> Enviando...</>
-                  ) : fup.status === "Enviado" ? (
-                    <><CheckCircle2 className="h-5 w-5" /> Mensagem já enviada</>
-                  ) : (
-                    <><MessageCircle className="h-5 w-5" /> Enviar WhatsApp Agora</>
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground/80 mt-4 font-light text-center sm:text-left">
-                  {isEditing
-                    ? "Salve as alterações para habilitar o envio."
-                    : fup.status === "Enviado"
-                      ? "Este follow-up já foi enviado e não será disparado novamente."
-                      : "Envia a mensagem via Evolution API diretamente para o WhatsApp do paciente."}
-                </p>
-              </div>
-            </MotionDiv>
-
-            <StaggerDiv className="flex flex-col gap-6">
-              <MotionDiv className="glass-panel rounded-3xl p-8 flex flex-col gap-4">
-                <h3 className="font-light text-muted-foreground mb-2">Atualizar Status</h3>
-                
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleStatusChange("Fechado")}
-                  className="w-full justify-start h-12 rounded-xl border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 transition-colors"
-                >
-                  <CheckCircle2 className="mr-3 h-5 w-5" />
-                  Marcar como Fechado
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleStatusChange("Perdido", "Motivo não informado")}
-                  className="w-full justify-start h-12 rounded-xl border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/30 text-red-600 dark:text-red-400 transition-colors"
-                >
-                  <XCircle className="mr-3 h-5 w-5" />
-                  Marcar como Perdido
-                </Button>
-              </MotionDiv>
-
-              <MotionDiv className="bg-foreground/[0.02] border border-border rounded-3xl p-8 flex flex-col gap-3">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <ShieldCheck className="h-4 w-4" />
-                  <h3 className="font-light">Privacidade</h3>
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <p className="text-sm font-medium">Atualizar situaÃ§Ã£o</p>
+                <div className="mt-4 grid gap-3">
+                  <Button variant="outline" onClick={() => handleStatusChange("Fechado")} className="justify-start text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="size-4" />Marcar como fechado</Button>
+                  <Button variant="outline" onClick={() => handleStatusChange("Perdido", "Motivo nÃ£o informado")} className="justify-start text-destructive"><XCircle className="size-4" />Marcar como perdido</Button>
                 </div>
-                <p className="text-sm text-muted-foreground/80 font-light leading-relaxed">
-                  Os dados do paciente são visíveis apenas para você e armazenados com segurança.
-                </p>
-              </MotionDiv>
-            </StaggerDiv>
+              </div>
+            </aside>
+          </TabsContent>
 
-          </div>
-          </StaggerDiv>
-        </main>
+          <TabsContent value="cadastro">
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+              <div className="mb-6"><h2 className="text-lg font-semibold text-balance">Dados cadastrais</h2><p className="mt-1 text-sm text-muted-foreground text-pretty">InformaÃ§Ãµes pessoais e de contato do paciente.</p></div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="patient-name">Nome completo</Label>
+                  {isEditing ? <Input id="patient-name" value={editData.patients?.name || ""} onChange={(e) => updatePatient("name", e.target.value)} /> : <FieldValue><span className="flex items-center gap-2"><UserRound className="size-4 text-muted-foreground" />{patient?.name}</span></FieldValue>}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="patient-phone">WhatsApp</Label>
+                  {isEditing ? <Input id="patient-phone" type="tel" value={editData.patients?.phone || ""} onChange={(e) => updatePatient("phone", e.target.value)} /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><Phone className="size-4 text-muted-foreground" />{patient?.phone}</span></FieldValue>}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="patient-cpf">CPF</Label>
+                  {isEditing ? <Input id="patient-cpf" inputMode="numeric" maxLength={14} value={editData.patients?.cpf || ""} onChange={(e) => updatePatient("cpf", e.target.value)} placeholder="000.000.000-00" /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><IdCard className="size-4 text-muted-foreground" />{formatCpf(patient?.cpf)}</span></FieldValue>}
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor="patient-address">EndereÃ§o</Label>
+                  {isEditing ? <Textarea id="patient-address" value={editData.patients?.address || ""} onChange={(e) => updatePatient("address", e.target.value)} placeholder="Rua, nÃºmero, complemento, bairro, cidade e CEP" className="min-h-28 resize-none" /> : <FieldValue><span className="flex items-start gap-2 whitespace-pre-wrap"><MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{patient?.address || "EndereÃ§o nÃ£o informado"}</span></FieldValue>}
+                </div>
+              </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="mensagens">
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+              <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div><h2 className="text-lg font-semibold text-balance">Mensagens e agendamento</h2><p className="mt-1 text-sm text-muted-foreground text-pretty">ConteÃºdo, data programada e confirmaÃ§Ã£o dos disparos automÃ¡ticos.</p></div>
+                <p className="text-xs text-muted-foreground">O envio ocorre automaticamente na data de retorno.</p>
+              </div>
+              {isEditing && <div className="mb-6 grid gap-5 rounded-xl border border-border bg-muted/20 p-4">
+                <div className="grid gap-2"><Label htmlFor="message">Mensagem programada</Label><Textarea id="message" value={editData.message} onChange={(e) => setEditData({ ...editData, message: e.target.value })} className="min-h-32 resize-none" /></div>
+                <div className="grid gap-2 sm:max-w-sm"><Label htmlFor="message-date">Data do disparo</Label><Input id="message-date" type="datetime-local" value={toDateTimeLocal(editData.scheduled_at)} onChange={(e) => setEditData({ ...editData, scheduled_at: new Date(e.target.value).toISOString() })} /></div>
+              </div>}
+              <div className="grid gap-4">
+                {messages.map((item) => <article key={item.id} className="rounded-xl border border-border p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0"><p className="text-sm leading-6 text-pretty">{item.message}</p><div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground tabular-nums"><span className="flex items-center gap-1.5"><CalendarDays className="size-3.5" />Programada: {formatDateTime(item.scheduled_at)}</span>{item.sent_at && <span className="flex items-center gap-1.5"><CheckCircle2 className="size-3.5" />Enviada: {formatDateTime(item.sent_at)}</span>}</div></div>
+                    <Badge variant="outline" className={cn("shrink-0", getStatusBadgeClass(item.status))}>{item.status}</Badge>
+                  </div>
+                </article>)}
+                {messages.length === 0 && <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-12 text-center">
+                  <MessageCircle className="size-9 text-muted-foreground" /><div><p className="font-medium">Nenhuma mensagem cadastrada</p><p className="mt-1 text-sm text-muted-foreground text-pretty">Use o modo de ediÃ§Ã£o para escrever e agendar a primeira mensagem.</p></div>{!isEditing && <Button variant="outline" onClick={() => setIsEditing(true)}><Pencil className="size-4" />Adicionar mensagem</Button>}
+                </div>}
+              </div>
+            </section>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
 }
+

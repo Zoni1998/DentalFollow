@@ -1,9 +1,9 @@
 -- ============================================================
--- AppDrPedro — Schema Unificado (database_schema.sql)
+-- AppDrPedro â€” Schema Unificado (database_schema.sql)
 ---alignado com supabase/migrations/
 -- ============================================================
--- Este arquivo espelha a migration 00001 e serve como referência
--- rápida do schema completo do banco.
+-- Este arquivo espelha a migration 00001 e serve como referÃªncia
+-- rÃ¡pida do schema completo do banco.
 -- ============================================================
 
 -- Create patients table (dados pessoais apenas)
@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS public.patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     phone TEXT NOT NULL,
+    cpf TEXT,
+    address TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -27,12 +29,14 @@ CREATE TABLE IF NOT EXISTS public.followups (
     status TEXT NOT NULL DEFAULT 'Pendente' CHECK (status IN ('Pendente', 'Enviado', 'Fechado', 'Perdido')),
     lost_reason TEXT,
     zapi_response JSONB,
+    sent_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_patients_phone ON public.patients(phone);
+CREATE INDEX IF NOT EXISTS idx_patients_cpf ON public.patients(cpf);
 CREATE INDEX IF NOT EXISTS idx_followups_patient_id ON public.followups(patient_id);
 CREATE INDEX IF NOT EXISTS idx_followups_consultation_date ON public.followups(consultation_date);
 CREATE INDEX IF NOT EXISTS idx_followups_scheduled_at ON public.followups(scheduled_at);
@@ -55,3 +59,4 @@ FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_followups_modtime
 BEFORE UPDATE ON public.followups
 FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+

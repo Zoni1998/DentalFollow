@@ -23,16 +23,16 @@ export default function NovoFollowup() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Validação de telefone brasileiro
+  // ValidaÃ§Ã£o de telefone brasileiro
   const validatePhone = (phone: string): boolean => {
     const clean = phone.replace(/\D/g, "");
     return clean.length >= 10 && clean.length <= 13;
   };
 
-  // Validação de valor monetário
+  // ValidaÃ§Ã£o de valor monetÃ¡rio
   const parseAmount = (value: string): number => {
     if (!value) return 0;
-    // Remove pontos de milhar e troca vírgula decimal por ponto
+    // Remove pontos de milhar e troca vÃ­rgula decimal por ponto
     const clean = value.replace(/\./g, "").replace(",", ".");
     const parsed = parseFloat(clean);
     return isNaN(parsed) ? 0 : parsed;
@@ -45,6 +45,8 @@ export default function NovoFollowup() {
     const formData = new FormData(e.currentTarget);
     const name = (formData.get("nome") as string).trim();
     const phone = (formData.get("telefone") as string).trim();
+    const cpf = (formData.get("cpf") as string).trim();
+    const address = (formData.get("endereco") as string).trim();
     const treatment = (formData.get("tratamento") as string).trim();
     const value = (formData.get("valor") as string).trim();
     const message = (formData.get("mensagem") as string).trim();
@@ -52,21 +54,21 @@ export default function NovoFollowup() {
     const date = formData.get("data") as string;
     const time = formData.get("hora") as string;
 
-    // Validação
+    // ValidaÃ§Ã£o
     if (!name || name.length < 3) {
-      toast.error("Nome inválido", { description: "Digite o nome completo do paciente." });
+      toast.error("Nome invÃ¡lido", { description: "Digite o nome completo do paciente." });
       setIsSubmitting(false);
       return;
     }
 
     if (!validatePhone(phone)) {
-      toast.error("Telefone inválido", { description: "Use o formato (11) 99999-9999." });
+      toast.error("Telefone invÃ¡lido", { description: "Use o formato (11) 99999-9999." });
       setIsSubmitting(false);
       return;
     }
 
     if (!treatment || treatment.length < 3) {
-      toast.error("Tratamento inválido", { description: "Descreva o tratamento de interesse." });
+      toast.error("Tratamento invÃ¡lido", { description: "Descreva o tratamento de interesse." });
       setIsSubmitting(false);
       return;
     }
@@ -83,6 +85,8 @@ export default function NovoFollowup() {
         body: JSON.stringify({
           name,
           phone,
+          cpf,
+          address,
           treatment,
           amount,
           message: message || "",
@@ -101,15 +105,15 @@ export default function NovoFollowup() {
         toast.success("Paciente cadastrado!", { description: json.warning });
       } else {
         toast.success("Paciente cadastrado com sucesso!", {
-          description: "O orçamento foi registrado e o follow-up agendado."
+          description: "O orÃ§amento foi registrado e o follow-up agendado."
         });
       }
       
       router.push("/");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
       toast.error("Erro ao salvar paciente", {
-        description: error.message || "Tente novamente mais tarde."
+        description: error instanceof Error ? error.message : "Tente novamente mais tarde."
       });
     } finally {
       setIsSubmitting(false);
@@ -144,7 +148,7 @@ export default function NovoFollowup() {
             
             <MotionDiv className="mb-10 relative z-10">
               <h2 className="text-2xl font-light tracking-tight text-foreground">Detalhes do Paciente</h2>
-              <p className="text-sm text-muted-foreground mt-2 font-light">Preencha as informações do orçamento para organizar o follow-up.</p>
+              <p className="text-sm text-muted-foreground mt-2 font-light">Preencha as informaÃ§Ãµes do orÃ§amento para organizar o follow-up.</p>
             </MotionDiv>
 
             <form className="grid gap-8 relative z-10" onSubmit={handleSubmit}>
@@ -156,7 +160,7 @@ export default function NovoFollowup() {
                     id="nome"
                     name="nome"
                     type="text" 
-                    placeholder="Ex: João da Silva" 
+                    placeholder="Ex: JoÃ£o da Silva" 
                     required
                     minLength={3}
                     className="h-12 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl"
@@ -176,6 +180,33 @@ export default function NovoFollowup() {
                 </div>
               </MotionDiv>
 
+              <MotionDiv className="grid gap-6 sm:grid-cols-2">
+                <div className="grid gap-3">
+                  <Label htmlFor="cpf" className="text-sm font-medium text-foreground/80">CPF (Opcional)</Label>
+                  <Input
+                    id="cpf"
+                    name="cpf"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="000.000.000-00"
+                    maxLength={14}
+                    className="h-12 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl"
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:row-span-2">
+                  <Label htmlFor="endereco" className="text-sm font-medium text-foreground/80">EndereÃ§o (Opcional)</Label>
+                  <Textarea
+                    id="endereco"
+                    name="endereco"
+                    autoComplete="street-address"
+                    placeholder="Rua, nÃºmero, complemento, bairro, cidade e CEP"
+                    className="min-h-28 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl resize-none p-4"
+                  />
+                </div>
+              </MotionDiv>
+
               <MotionDiv className="grid gap-3">
                 <Label htmlFor="data_consulta" className="text-sm font-medium text-foreground/80">Data do Atendimento</Label>
                 <Input
@@ -186,7 +217,7 @@ export default function NovoFollowup() {
                   required
                   className="h-12 bg-foreground/5 border-foreground/10 text-foreground focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl [color-scheme:dark]"
                 />
-                <p className="text-xs text-muted-foreground">Informe o dia em que o paciente foi atendido. Esta data define se o orçamento está quente ou frio.</p>
+                <p className="text-xs text-muted-foreground">Informe o dia em que o paciente foi atendido. Esta data define se o orÃ§amento estÃ¡ quente ou frio.</p>
               </MotionDiv>
 
               <MotionDiv className="grid gap-6 sm:grid-cols-2">
@@ -204,7 +235,7 @@ export default function NovoFollowup() {
                 </div>
                 
                 <div className="grid gap-3">
-                  <Label htmlFor="valor" className="text-sm font-medium text-foreground/80">Valor do Orçamento (R$)</Label>
+                  <Label htmlFor="valor" className="text-sm font-medium text-foreground/80">Valor do OrÃ§amento (R$)</Label>
                   <Input 
                     id="valor"
                     name="valor"
@@ -237,7 +268,7 @@ export default function NovoFollowup() {
                   />
                 </div>
                 <div className="grid gap-3">
-                  <Label htmlFor="hora" className="text-sm font-medium text-foreground/80">Horário</Label>
+                  <Label htmlFor="hora" className="text-sm font-medium text-foreground/80">HorÃ¡rio</Label>
                   <Input 
                     id="hora"
                     name="hora"
@@ -274,3 +305,4 @@ export default function NovoFollowup() {
     </div>
   );
 }
+
