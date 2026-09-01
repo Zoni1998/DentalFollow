@@ -114,6 +114,35 @@ export async function POST(req: Request) {
       const patients = fup.patients as unknown as { id: string; phone: string } | null;
       const patientPhone = patients?.phone;
 
+      // Reserva o follow-up antes de chamar a Evolution API. A atualização
+      // condicional funciona como um lock atômico: se dois webhooks processarem
+      // a mesma linha, somente um consegue trocar Pendente por Enviado.
+      const { data: claimedFollowup, error: claimError } = await supabaseAdmin
+        .from("followups")
+        .update({
+          status: "Enviado",
+          zapi_response: {
+            status: "processing",
+            claimed_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", fup.id)
+        .eq("status", "Pendente")
+        .select("id")
+        .maybeSingle();
+
+      if (claimError) {
+        console.error(`Erro ao reservar follow-up ${fup.id}:`, claimError);
+        results.push({ id: fup.id, status: "Erro", error: claimError.message });
+        continue;
+      }
+
+      if (!claimedFollowup) {
+        // Outra execução já reservou ou enviou esta mensagem.
+        results.push({ id: fup.id, status: "Ignorado", reason: "Já está em processamento" });
+        continue;
+      }
+
       if (!patientPhone) {
         await supabaseAdmin
           .from("followups")
@@ -126,19 +155,21 @@ export async function POST(req: Request) {
       const sendResult = await sendWhatsAppMessage(patientPhone, fup.message);
 
       if (sendResult.success) {
-        // 4. Atualiza o banco como Enviado
-        await supabaseAdmin
-          .from("followups")
-          .update({ status: "Enviado", zapi_response: sendResult })
-          .eq("id", fup.id);
-
-        results.push({ id: fup.id, status: "Enviado" });
-      } else {
-        // Salva erro mas mantém como Pendente para retry
+        // 4. Mantém Enviado e grava a resposta final da Evolution API
         await supabaseAdmin
           .from("followups")
           .update({ zapi_response: sendResult })
-          .eq("id", fup.id);
+          .eq("id", fup.id)
+          .eq("status", "Enviado");
+
+        results.push({ id: fup.id, status: "Enviado" });
+      } else {
+        // Libera a reserva para uma tentativa futura em caso de erro.
+        await supabaseAdmin
+          .from("followups")
+          .update({ status: "Pendente", zapi_response: sendResult })
+          .eq("id", fup.id)
+          .eq("status", "Enviado");
 
         results.push({ id: fup.id, status: "Erro", error: sendResult.error });
       }
