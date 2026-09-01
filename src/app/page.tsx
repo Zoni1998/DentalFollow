@@ -2,7 +2,16 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Users, ArrowUpRight, Clock, Settings, Loader2, Smartphone } from "lucide-react";
+import {
+  Plus,
+  Users,
+  ArrowUpRight,
+  Clock,
+  Settings,
+  Loader2,
+  Smartphone,
+  CalendarDays,
+} from "lucide-react";
 import { ImageLogo } from "@/components/ui/image-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { StaggerDiv, MotionDiv } from "@/components/ui/motion";
@@ -53,6 +62,29 @@ function formatWhatsAppNumber(value: string | null) {
   }
 
   return value;
+}
+
+function getContactDayKey(value: string) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function getContactDayLabel(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  if (date.toDateString() === today.toDateString()) return "Hoje";
+  if (date.toDateString() === tomorrow.toDateString()) return "Amanhã";
+
+  const label = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(date);
+
+  return label.charAt(0).toLocaleUpperCase("pt-BR") + label.slice(1);
 }
 
 function WhatsAppConnectionCard({
@@ -175,6 +207,24 @@ export default function Dashboard() {
   }
 
   const d = data || { totalOpen: 0, todayCount: 0, conversionRate: 0, conversionDiff: 0, upcoming: [] };
+  const groupedUpcoming = d.upcoming.reduce<
+    Array<{ key: string; label: string; followups: DashboardData["upcoming"] }>
+  >((groups, followup) => {
+    const key = getContactDayKey(followup.scheduled_at);
+    const currentGroup = groups.at(-1);
+
+    if (!currentGroup || currentGroup.key !== key) {
+      groups.push({
+        key,
+        label: getContactDayLabel(followup.scheduled_at),
+        followups: [followup],
+      });
+    } else {
+      currentGroup.followups.push(followup);
+    }
+
+    return groups;
+  }, []);
 
   return (
     <div className="flex min-h-dvh w-full flex-col bg-transparent overflow-x-hidden">
@@ -315,46 +365,68 @@ export default function Dashboard() {
                 </Link>
               </div>
               
-              <div className="grid gap-3">
+              <div className="grid gap-5">
                 {d.upcoming.length === 0 ? (
-                  <MotionDiv className="text-center py-16 glass-panel rounded-2xl">
-                    <p className="text-muted-foreground font-light">Nenhum contato agendado. Que tal começar um novo follow-up?</p>
+                  <MotionDiv className="flex flex-col items-center gap-4 rounded-2xl py-12 text-center glass-panel">
+                    <div>
+                      <p className="font-medium text-foreground">Nenhum contato agendado</p>
+                      <p className="mt-1 text-sm text-muted-foreground text-pretty">Cadastre um paciente e escolha uma data de retorno para vê-lo aqui.</p>
+                    </div>
+                    <Link href="/followup/novo" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
+                      <Plus className="size-4" />
+                      Novo follow-up
+                    </Link>
                   </MotionDiv>
                 ) : (
-                  d.upcoming.map((fup) => {
-                    const patient = fup.patients;
-                    if (!patient) return null;
-                    return (
-                      <Link 
-                        key={fup.id} 
-                        href={`/followup/${fup.id}`} 
-                        className="glass-panel glass-panel-hover flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 rounded-2xl gap-4 cursor-pointer"
-                      >
-                        <div className="flex items-start gap-5">
-                          <div className="h-12 w-12 rounded-full bg-foreground/5 border border-foreground/10 flex items-center justify-center text-foreground font-medium">
-                            {getInitials(patient.name)}
-                          </div>
-                          <div>
-                            <h3 className="font-medium text-foreground text-lg">{patient.name}</h3>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-sm text-muted-foreground">{fup.treatment}</span>
-                              <span className="text-xs text-muted-foreground/60">•</span>
-                              <span className="text-sm text-muted-foreground">{patient.phone}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
-                          <div className="flex items-center justify-between sm:justify-end gap-4 w-full">
-                            <span className="font-medium text-foreground">{formatCurrency(fup.amount)}</span>
-                            <Badge variant="outline" className={cn("font-normal", getStatusBadgeClass(fup.status))}>
-                              {fup.status}
-                            </Badge>
-                          </div>
-                          <span className="text-xs text-muted-foreground/80">{timeAgo(fup.scheduled_at)} às {formatTime(fup.scheduled_at)}</span>
-                        </div>
-                      </Link>
-                    );
-                  })
+                  groupedUpcoming.map((group) => (
+                    <section key={group.key} aria-labelledby={`contact-day-${group.key}`} className="grid gap-3">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <CalendarDays className="size-4" aria-hidden="true" />
+                        <h3 id={`contact-day-${group.key}`}>{group.label}</h3>
+                        <span className="tabular-nums">({group.followups.length})</span>
+                      </div>
+
+                      <div className="grid gap-3">
+                        {group.followups.map((fup) => {
+                          const patient = fup.patients;
+                          if (!patient) return null;
+
+                          return (
+                            <Link
+                              key={fup.id}
+                              href={`/followup/${fup.id}`}
+                              className="glass-panel glass-panel-hover flex flex-col items-start justify-between gap-4 rounded-2xl p-5 sm:flex-row sm:items-center"
+                            >
+                              <div className="flex min-w-0 items-start gap-5">
+                                <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-foreground/5 font-medium text-foreground">
+                                  {getInitials(patient.name)}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="truncate text-lg font-medium text-foreground">{patient.name}</h4>
+                                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <span className="line-clamp-1 text-sm text-muted-foreground">{fup.treatment}</span>
+                                    <span className="text-xs text-muted-foreground/60">•</span>
+                                    <span className="text-sm text-muted-foreground tabular-nums">{patient.phone}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+                                <div className="flex w-full items-center justify-between gap-4 sm:justify-end">
+                                  <span className="font-medium text-foreground tabular-nums">{formatCurrency(fup.amount)}</span>
+                                  <Badge variant="outline" className={cn("font-normal", getStatusBadgeClass(fup.status))}>
+                                    {fup.status}
+                                  </Badge>
+                                </div>
+                                <span className="text-xs text-muted-foreground/80 tabular-nums">
+                                  {timeAgo(fup.scheduled_at)} às {formatTime(fup.scheduled_at)}
+                                </span>
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))
                 )}
               </div>
             </MotionDiv>
@@ -364,4 +436,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

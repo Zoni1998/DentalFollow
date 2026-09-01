@@ -30,24 +30,24 @@ export async function POST(req: Request) {
     const phone = sanitizePhone(rawPhone);
     const cpf = sanitizeCpf(rawCpf);
 
-    // ValidaÃ§Ã£o de entrada
+    // Validação de entrada
     if (!name || !phone || !treatment || !consultation_date) {
       return NextResponse.json(
-        { error: "Nome, telefone, tratamento e data do atendimento sÃ£o obrigatÃ³rios" },
+        { error: "Nome, telefone, tratamento e data do atendimento são obrigatórios" },
         { status: 400 }
       );
     }
 
     if (!isValidDateOnly(consultation_date)) {
       return NextResponse.json(
-        { error: "Data do atendimento invÃ¡lida" },
+        { error: "Data do atendimento inválida" },
         { status: 400 }
       );
     }
 
     if (cpf && cpf.length !== 11) {
       return NextResponse.json(
-        { error: "CPF invÃ¡lido" },
+        { error: "CPF inválido" },
         { status: 400 }
       );
     }
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
 
       if (fupError) {
         console.error("Erro ao criar followup:", fupError);
-        // Paciente foi criado, mas followup falhou â€” retorna sucesso parcial
+        // Paciente foi criado, mas followup falhou — retorna sucesso parcial
         return NextResponse.json({
           success: true,
           patient: patientData,
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
         });
       }
     } else if (patientData) {
-      // Sem agendamento â€” cria followup sem mensagem agendada (status Fechado ou Pendente sem data)
+      // Sem agendamento — cria followup sem mensagem agendada (status Fechado ou Pendente sem data)
       const { error: fupError } = await supabaseAdmin
         .from("followups")
         .insert([{
@@ -154,12 +154,12 @@ export async function PUT(req: Request) {
       : undefined;
 
     if (!followup_id) {
-      return NextResponse.json({ error: "followup_id Ã© obrigatÃ³rio" }, { status: 400 });
+      return NextResponse.json({ error: "followup_id é obrigatório" }, { status: 400 });
     }
 
 
     if (patient_cpf && patient_cpf.length !== 11) {
-      return NextResponse.json({ error: "CPF invÃ¡lido" }, { status: 400 });
+      return NextResponse.json({ error: "CPF inválido" }, { status: 400 });
     }
 
     // Buscar o followup para obter o patient_id
@@ -170,7 +170,7 @@ export async function PUT(req: Request) {
       .single();
 
     if (fupError || !fup) {
-      return NextResponse.json({ error: "Followup nÃ£o encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Followup não encontrado" }, { status: 404 });
     }
 
     // Atualizar paciente
@@ -202,7 +202,7 @@ export async function PUT(req: Request) {
     if (scheduled_at !== undefined) fupUpdate.scheduled_at = scheduled_at;
     if (consultation_date !== undefined) {
       if (!isValidDateOnly(consultation_date)) {
-        return NextResponse.json({ error: "Data do atendimento invÃ¡lida" }, { status: 400 });
+        return NextResponse.json({ error: "Data do atendimento inválida" }, { status: 400 });
       }
       fupUpdate.consultation_date = consultation_date;
     }
@@ -228,4 +228,3 @@ export async function PUT(req: Request) {
     );
   }
 }
-

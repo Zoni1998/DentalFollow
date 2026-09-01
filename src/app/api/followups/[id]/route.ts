@@ -41,7 +41,7 @@ export async function GET(
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ error: "Followup nÃ£o encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Followup não encontrado" }, { status: 404 });
     }
 
     const { data: messages, error: messagesError } = await supabaseAdmin
@@ -52,7 +52,7 @@ export async function GET(
       .order("scheduled_at", { ascending: false });
 
     if (messagesError) {
-      console.error("Erro ao buscar histÃ³rico de mensagens:", messagesError);
+      console.error("Erro ao buscar histórico de mensagens:", messagesError);
     }
 
     return NextResponse.json({
@@ -79,7 +79,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Primeiro busca o patient_id para deletar o paciente tambÃ©m
+    // Primeiro busca o patient_id para deletar o paciente também
     const { data: fup } = await supabaseAdmin
       .from("followups")
       .select("patient_id")
@@ -96,7 +96,7 @@ export async function DELETE(
       return NextResponse.json({ error: fupError.message }, { status: 500 });
     }
 
-    // Opcionalmente deleta o paciente para nÃ£o deixar sujeira
+    // Opcionalmente deleta o paciente para não deixar sujeira
     if (fup?.patient_id) {
       await supabaseAdmin
         .from("patients")
@@ -113,4 +113,3 @@ export async function DELETE(
     );
   }
 }
-

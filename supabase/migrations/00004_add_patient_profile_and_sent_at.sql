@@ -11,4 +11,3 @@ ALTER TABLE public.followups
 
 CREATE INDEX IF NOT EXISTS idx_patients_cpf ON public.patients(cpf);
 
-

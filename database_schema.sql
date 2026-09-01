@@ -1,9 +1,9 @@
 -- ============================================================
--- AppDrPedro â€” Schema Unificado (database_schema.sql)
+-- AppDrPedro — Schema Unificado (database_schema.sql)
 ---alignado com supabase/migrations/
 -- ============================================================
--- Este arquivo espelha a migration 00001 e serve como referÃªncia
--- rÃ¡pida do schema completo do banco.
+-- Este arquivo espelha a migration 00001 e serve como referência
+-- rápida do schema completo do banco.
 -- ============================================================
 
 -- Create patients table (dados pessoais apenas)
@@ -59,4 +59,3 @@ FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_followups_modtime
 BEFORE UPDATE ON public.followups
 FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
-

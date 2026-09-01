@@ -1,9 +1,9 @@
 /**
- * FunÃ§Ãµes utilitÃ¡rias para formataÃ§Ã£o de dados do DentalFollow.
+ * Funções utilitárias para formatação de dados do DentalFollow.
  */
 
 /**
- * Formata um valor numÃ©rico para moeda brasileira (R$).
+ * Formata um valor numérico para moeda brasileira (R$).
  */
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -14,7 +14,7 @@ export function formatCurrency(value: number): string {
 
 /**
  * Gera iniciais a partir de um nome.
- * Ex: "JoÃ£o Silva" â†’ "JS"
+ * Ex: "João Silva" → "JS"
  */
 export function getInitials(name: string): string {
   if (!name) return "?";
@@ -27,11 +27,11 @@ export function getInitials(name: string): string {
 }
 
 /**
- * Formata uma data ISO para exibiÃ§Ã£o amigÃ¡vel em pt-BR.
- * Ex: "2026-07-21T14:30:00" â†’ "21/07/2026"
+ * Formata uma data ISO para exibição amigável em pt-BR.
+ * Ex: "2026-07-21T14:30:00" → "21/07/2026"
  */
 export function formatDate(isoDate: string): string {
-  if (!isoDate) return "â€”";
+  if (!isoDate) return "—";
   const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
 
   if (dateOnlyMatch) {
@@ -44,10 +44,10 @@ export function formatDate(isoDate: string): string {
 
 /**
  * Formata uma data ISO para data e hora.
- * Ex: "2026-07-21T14:30:00" â†’ "21/07/2026 - 14:30"
+ * Ex: "2026-07-21T14:30:00" → "21/07/2026 - 14:30"
  */
 export function formatDateTime(isoDate: string): string {
-  if (!isoDate) return "â€”";
+  if (!isoDate) return "—";
   return new Date(isoDate).toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -59,20 +59,20 @@ export function formatDateTime(isoDate: string): string {
 
 /**
  * Formata apenas a hora de uma data ISO.
- * Ex: "2026-07-21T14:30:00" â†’ "14:30"
+ * Ex: "2026-07-21T14:30:00" → "14:30"
  */
 export function formatTime(isoDate: string): string {
-  if (!isoDate) return "â€”";
+  if (!isoDate) return "—";
   return new Date(isoDate).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-/** Formata CPF armazenado apenas com dÃ­gitos. */
+/** Formata CPF armazenado apenas com dígitos. */
 export function formatCpf(value: string | null | undefined): string {
   const digits = (value || "").replace(/\D/g, "").slice(0, 11);
-  if (digits.length !== 11) return value || "â€”";
+  if (digits.length !== 11) return value || "—";
 
   return digits.replace(
     /(\d{3})(\d{3})(\d{3})(\d{2})/,
@@ -82,10 +82,10 @@ export function formatCpf(value: string | null | undefined): string {
 
 /**
  * Calcula quantos dias se passaram desde uma data.
- * Retorna string amigÃ¡vel: "Hoje", "Ontem", "HÃ¡ N dias".
+ * Retorna string amigável: "Hoje", "Ontem", "Há N dias".
  */
 export function timeAgo(isoDate: string): string {
-  if (!isoDate) return "â€”";
+  if (!isoDate) return "—";
   const date = new Date(isoDate);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -93,9 +93,9 @@ export function timeAgo(isoDate: string): string {
 
   if (diffDays === 0) return "Hoje";
   if (diffDays === 1) return "Ontem";
-  if (diffDays < 7) return `HÃ¡ ${diffDays} dias`;
-  if (diffDays < 30) return `HÃ¡ ${Math.floor(diffDays / 7)} semanas`;
-  return `HÃ¡ ${Math.floor(diffDays / 30)} meses`;
+  if (diffDays < 7) return `Há ${diffDays} dias`;
+  if (diffDays < 30) return `Há ${Math.floor(diffDays / 7)} semanas`;
+  return `Há ${Math.floor(diffDays / 30)} meses`;
 }
 
 /**
@@ -117,7 +117,7 @@ export function getStatusBadgeClass(status: string): string {
 }
 
 /**
- * Verifica se uma data ISO Ã© hoje.
+ * Verifica se uma data ISO é hoje.
  */
 export function isToday(isoDate: string): boolean {
   const date = new Date(isoDate);
@@ -130,9 +130,9 @@ export function isToday(isoDate: string): boolean {
 }
 
 /**
- * Sanitiza o nÃºmero de telefone para o formato padrÃ£o do WhatsApp.
- * Remove todos os caracteres nÃ£o numÃ©ricos.
- * Se o nÃºmero nÃ£o comeÃ§ar com 55 (Brasil), adiciona o prefixo 55.
+ * Sanitiza o número de telefone para o formato padrão do WhatsApp.
+ * Remove todos os caracteres não numéricos.
+ * Se o número não começar com 55 (Brasil), adiciona o prefixo 55.
  */
 export function sanitizePhone(phone: string): string {
   if (!phone) return "";
@@ -142,4 +142,3 @@ export function sanitizePhone(phone: string): string {
   }
   return digits;
 }
-

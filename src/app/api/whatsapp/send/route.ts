@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         .single();
 
       if (error || !fup) {
-        return NextResponse.json({ error: "Followup nÃ£o encontrado" }, { status: 404 });
+        return NextResponse.json({ error: "Followup não encontrado" }, { status: 404 });
       }
 
       const patients = fup.patients as unknown as { id: string; phone: string } | null;
@@ -43,11 +43,11 @@ export async function POST(req: Request) {
     }
 
     if (!targetPhone || !targetMessage) {
-      return NextResponse.json({ error: "Telefone e mensagem sÃ£o obrigatÃ³rios" }, { status: 400 });
+      return NextResponse.json({ error: "Telefone e mensagem são obrigatórios" }, { status: 400 });
     }
 
-    // Para follow-ups, reserva a linha de modo atÃ´mico antes do envio.
-    // Isso evita duplicatas entre cliques rÃ¡pidos, chamadas repetidas e o QStash.
+    // Para follow-ups, reserva a linha de modo atômico antes do envio.
+    // Isso evita duplicatas entre cliques rápidos, chamadas repetidas e o QStash.
     if (followup_id) {
       const { data: claimedFollowup, error: claimError } = await supabaseAdmin
         .from("followups")
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
       if (!claimedFollowup) {
         return NextResponse.json(
-          { error: "Mensagem jÃ¡ enviada ou em processamento" },
+          { error: "Mensagem já enviada ou em processamento" },
           { status: 409 }
         );
       }
@@ -109,4 +109,3 @@ export async function POST(req: Request) {
     );
   }
 }
-

@@ -64,7 +64,7 @@ function toDateTimeLocal(value: string): string {
 function FieldValue({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-11 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-sm text-foreground">
-      {children || "â€”"}
+      {children || "—"}
     </div>
   );
 }
@@ -97,7 +97,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
   }, [id]);
 
   useEffect(() => {
-    // Esta chamada sincroniza a pÃ¡gina cliente com a API ao trocar o id da rota.
+    // Esta chamada sincroniza a página cliente com a API ao trocar o id da rota.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFup();
   }, [fetchFup]);
@@ -135,9 +135,9 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
       if (!response.ok) throw new Error(result.error || "Falha ao salvar");
       await fetchFup();
       setIsEditing(false);
-      toast.success("InformaÃ§Ãµes do paciente atualizadas!");
+      toast.success("Informações do paciente atualizadas!");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao salvar alteraÃ§Ãµes");
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar alterações");
     } finally {
       setSaving(false);
     }
@@ -153,7 +153,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
       });
       if (!response.ok) throw new Error("Falha ao atualizar o status");
       await fetchFup();
-      toast.success(status === "Fechado" ? "OrÃ§amento fechado!" : "OrÃ§amento marcado como perdido.");
+      toast.success(status === "Fechado" ? "Orçamento fechado!" : "Orçamento marcado como perdido.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao atualizar status");
     }
@@ -183,8 +183,8 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
       <UserRound className="size-10 text-muted-foreground" />
       <div>
-        <h1 className="text-xl font-semibold text-balance">Paciente nÃ£o encontrado</h1>
-        <p className="mt-1 text-sm text-muted-foreground text-pretty">A ficha pode ter sido removida ou o link estÃ¡ incorreto.</p>
+        <h1 className="text-xl font-semibold text-balance">Paciente não encontrado</h1>
+        <p className="mt-1 text-sm text-muted-foreground text-pretty">A ficha pode ter sido removida ou o link está incorreto.</p>
       </div>
       <Link href="/followup/lista" className={buttonVariants({ variant: "outline" })}>Voltar para a lista</Link>
     </div>
@@ -215,7 +215,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-5 rounded-2xl border border-border bg-background p-6 shadow-xl">
                     <div>
                       <AlertDialog.Title className="text-lg font-semibold text-balance">Apagar esta ficha?</AlertDialog.Title>
-                      <AlertDialog.Description className="mt-2 text-sm text-muted-foreground text-pretty">O cadastro, o orÃ§amento e o histÃ³rico deste paciente serÃ£o removidos permanentemente.</AlertDialog.Description>
+                      <AlertDialog.Description className="mt-2 text-sm text-muted-foreground text-pretty">O cadastro, o orçamento e o histórico deste paciente serão removidos permanentemente.</AlertDialog.Description>
                     </div>
                     <div className="flex justify-end gap-3">
                       <AlertDialog.Close className={buttonVariants({ variant: "outline" })}>Cancelar</AlertDialog.Close>
@@ -244,13 +244,13 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
               <div className="min-w-0">
                 <p className="text-sm text-muted-foreground">Ficha do paciente</p>
                 <h1 className="truncate text-2xl font-semibold text-balance sm:text-3xl">{patient?.name || "Sem nome"}</h1>
-                <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><Phone className="size-4" />{patient?.phone || "Telefone nÃ£o informado"}</p>
+                <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground"><Phone className="size-4" />{patient?.phone || "Telefone não informado"}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline" className={cn("px-3 py-1", getStatusBadgeClass(displayData.status))}>{displayData.status}</Badge>
               <Badge variant="outline" className={cn("gap-1.5 px-3 py-1", isHot ? "border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400" : "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400")}>
-                {isHot ? <Flame className="size-3.5" /> : <Snowflake className="size-3.5" />}{temperature} Â· {daysSinceConsultation} {daysSinceConsultation === 1 ? "dia" : "dias"}
+                {isHot ? <Flame className="size-3.5" /> : <Snowflake className="size-3.5" />}{temperature} · {daysSinceConsultation} {daysSinceConsultation === 1 ? "dia" : "dias"}
               </Badge>
             </div>
           </div>
@@ -258,7 +258,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
 
         <Tabs defaultValue="orcamento" className="w-full gap-6">
           <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b border-border px-0 pb-1">
-            <TabsTrigger value="orcamento" className="min-h-10 flex-none gap-2 px-4"><FileText className="size-4" />OrÃ§amento</TabsTrigger>
+            <TabsTrigger value="orcamento" className="min-h-10 flex-none gap-2 px-4"><FileText className="size-4" />Orçamento</TabsTrigger>
             <TabsTrigger value="cadastro" className="min-h-10 flex-none gap-2 px-4"><IdCard className="size-4" />Cadastro</TabsTrigger>
             <TabsTrigger value="mensagens" className="min-h-10 flex-none gap-2 px-4"><MessageCircle className="size-4" />Mensagens enviadas</TabsTrigger>
           </TabsList>
@@ -266,7 +266,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
           <TabsContent value="orcamento" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
               <div className="mb-6">
-                <h2 className="text-lg font-semibold text-balance">Dados do orÃ§amento</h2>
+                <h2 className="text-lg font-semibold text-balance">Dados do orçamento</h2>
                 <p className="mt-1 text-sm text-muted-foreground text-pretty">Tratamento, valor e datas que definem a prioridade do contato.</p>
               </div>
               <div className="grid gap-5 sm:grid-cols-2">
@@ -275,7 +275,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   {isEditing ? <Input id="treatment" value={editData.treatment} onChange={(e) => setEditData({ ...editData, treatment: e.target.value })} /> : <FieldValue>{displayData.treatment}</FieldValue>}
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="amount">Valor do orÃ§amento</Label>
+                  <Label htmlFor="amount">Valor do orçamento</Label>
                   {isEditing ? <Input id="amount" type="number" min="0" step="0.01" value={editData.amount} onChange={(e) => setEditData({ ...editData, amount: Number(e.target.value) || 0 })} /> : <FieldValue><span className="font-medium tabular-nums">{formatCurrency(displayData.amount)}</span></FieldValue>}
                 </div>
                 <div className="grid gap-2">
@@ -287,7 +287,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   {isEditing ? <Input id="return-date" type="datetime-local" value={toDateTimeLocal(editData.scheduled_at)} onChange={(e) => setEditData({ ...editData, scheduled_at: new Date(e.target.value).toISOString() })} /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><Clock3 className="size-4 text-muted-foreground" />{formatDateTime(displayData.scheduled_at)}</span></FieldValue>}
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="status">SituaÃ§Ã£o do orÃ§amento</Label>
+                  <Label htmlFor="status">Situação do orçamento</Label>
                   {isEditing ? (
                     <select id="status" value={editData.status} onChange={(e) => { const status = e.target.value; setEditData({ ...editData, status, lost_reason: status === "Perdido" ? editData.lost_reason : null }); }} className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                       <option value="Pendente">Pendente</option><option value="Enviado">Enviado</option><option value="Fechado">Fechado</option><option value="Perdido">Perdido</option>
@@ -296,7 +296,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                 </div>
                 {displayData.status === "Perdido" && <div className="grid gap-2 sm:col-span-2">
                   <Label htmlFor="lost-reason">Motivo da perda</Label>
-                  {isEditing ? <Input id="lost-reason" value={editData.lost_reason || ""} onChange={(e) => setEditData({ ...editData, lost_reason: e.target.value })} /> : <FieldValue>{displayData.lost_reason || "Motivo nÃ£o informado"}</FieldValue>}
+                  {isEditing ? <Input id="lost-reason" value={editData.lost_reason || ""} onChange={(e) => setEditData({ ...editData, lost_reason: e.target.value })} /> : <FieldValue>{displayData.lost_reason || "Motivo não informado"}</FieldValue>}
                 </div>}
               </div>
             </section>
@@ -306,14 +306,14 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                 <p className="text-sm font-medium">Temperatura</p>
                 <div className="mt-3 flex items-center gap-3">
                   <div className={cn("flex size-10 items-center justify-center rounded-full", isHot ? "bg-orange-500/10 text-orange-600" : "bg-sky-500/10 text-sky-600")}>{isHot ? <Flame className="size-5" /> : <Snowflake className="size-5" />}</div>
-                  <div><p className="font-semibold">OrÃ§amento {temperature.toLowerCase()}</p><p className="text-xs text-muted-foreground">{isHot ? "Atendido hÃ¡ atÃ© 3 dias" : "Atendido hÃ¡ mais de 3 dias"}</p></div>
+                  <div><p className="font-semibold">Orçamento {temperature.toLowerCase()}</p><p className="text-xs text-muted-foreground">{isHot ? "Atendido há até 3 dias" : "Atendido há mais de 3 dias"}</p></div>
                 </div>
               </div>
               <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <p className="text-sm font-medium">Atualizar situaÃ§Ã£o</p>
+                <p className="text-sm font-medium">Atualizar situação</p>
                 <div className="mt-4 grid gap-3">
                   <Button variant="outline" onClick={() => handleStatusChange("Fechado")} className="justify-start text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="size-4" />Marcar como fechado</Button>
-                  <Button variant="outline" onClick={() => handleStatusChange("Perdido", "Motivo nÃ£o informado")} className="justify-start text-destructive"><XCircle className="size-4" />Marcar como perdido</Button>
+                  <Button variant="outline" onClick={() => handleStatusChange("Perdido", "Motivo não informado")} className="justify-start text-destructive"><XCircle className="size-4" />Marcar como perdido</Button>
                 </div>
               </div>
             </aside>
@@ -321,7 +321,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
 
           <TabsContent value="cadastro">
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
-              <div className="mb-6"><h2 className="text-lg font-semibold text-balance">Dados cadastrais</h2><p className="mt-1 text-sm text-muted-foreground text-pretty">InformaÃ§Ãµes pessoais e de contato do paciente.</p></div>
+              <div className="mb-6"><h2 className="text-lg font-semibold text-balance">Dados cadastrais</h2><p className="mt-1 text-sm text-muted-foreground text-pretty">Informações pessoais e de contato do paciente.</p></div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="patient-name">Nome completo</Label>
@@ -336,8 +336,8 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   {isEditing ? <Input id="patient-cpf" inputMode="numeric" maxLength={14} value={editData.patients?.cpf || ""} onChange={(e) => updatePatient("cpf", e.target.value)} placeholder="000.000.000-00" /> : <FieldValue><span className="flex items-center gap-2 tabular-nums"><IdCard className="size-4 text-muted-foreground" />{formatCpf(patient?.cpf)}</span></FieldValue>}
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="patient-address">EndereÃ§o</Label>
-                  {isEditing ? <Textarea id="patient-address" value={editData.patients?.address || ""} onChange={(e) => updatePatient("address", e.target.value)} placeholder="Rua, nÃºmero, complemento, bairro, cidade e CEP" className="min-h-28 resize-none" /> : <FieldValue><span className="flex items-start gap-2 whitespace-pre-wrap"><MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{patient?.address || "EndereÃ§o nÃ£o informado"}</span></FieldValue>}
+                  <Label htmlFor="patient-address">Endereço</Label>
+                  {isEditing ? <Textarea id="patient-address" value={editData.patients?.address || ""} onChange={(e) => updatePatient("address", e.target.value)} placeholder="Rua, número, complemento, bairro, cidade e CEP" className="min-h-28 resize-none" /> : <FieldValue><span className="flex items-start gap-2 whitespace-pre-wrap"><MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{patient?.address || "Endereço não informado"}</span></FieldValue>}
                 </div>
               </div>
             </section>
@@ -346,7 +346,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
           <TabsContent value="mensagens">
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div><h2 className="text-lg font-semibold text-balance">Mensagens e agendamento</h2><p className="mt-1 text-sm text-muted-foreground text-pretty">ConteÃºdo, data programada e confirmaÃ§Ã£o dos disparos automÃ¡ticos.</p></div>
+                <div><h2 className="text-lg font-semibold text-balance">Mensagens e agendamento</h2><p className="mt-1 text-sm text-muted-foreground text-pretty">Conteúdo, data programada e confirmação dos disparos automáticos.</p></div>
                 <p className="text-xs text-muted-foreground">O envio ocorre automaticamente na data de retorno.</p>
               </div>
               {isEditing && <div className="mb-6 grid gap-5 rounded-xl border border-border bg-muted/20 p-4">
@@ -361,7 +361,7 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
                   </div>
                 </article>)}
                 {messages.length === 0 && <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-12 text-center">
-                  <MessageCircle className="size-9 text-muted-foreground" /><div><p className="font-medium">Nenhuma mensagem cadastrada</p><p className="mt-1 text-sm text-muted-foreground text-pretty">Use o modo de ediÃ§Ã£o para escrever e agendar a primeira mensagem.</p></div>{!isEditing && <Button variant="outline" onClick={() => setIsEditing(true)}><Pencil className="size-4" />Adicionar mensagem</Button>}
+                  <MessageCircle className="size-9 text-muted-foreground" /><div><p className="font-medium">Nenhuma mensagem cadastrada</p><p className="mt-1 text-sm text-muted-foreground text-pretty">Use o modo de edição para escrever e agendar a primeira mensagem.</p></div>{!isEditing && <Button variant="outline" onClick={() => setIsEditing(true)}><Pencil className="size-4" />Adicionar mensagem</Button>}
                 </div>}
               </div>
             </section>
@@ -371,4 +371,3 @@ export default function FichaPaciente({ params }: { params: Promise<{ id: string
     </div>
   );
 }
-

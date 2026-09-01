@@ -23,16 +23,16 @@ export default function NovoFollowup() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ValidaÃ§Ã£o de telefone brasileiro
+  // Validação de telefone brasileiro
   const validatePhone = (phone: string): boolean => {
     const clean = phone.replace(/\D/g, "");
     return clean.length >= 10 && clean.length <= 13;
   };
 
-  // ValidaÃ§Ã£o de valor monetÃ¡rio
+  // Validação de valor monetário
   const parseAmount = (value: string): number => {
     if (!value) return 0;
-    // Remove pontos de milhar e troca vÃ­rgula decimal por ponto
+    // Remove pontos de milhar e troca vírgula decimal por ponto
     const clean = value.replace(/\./g, "").replace(",", ".");
     const parsed = parseFloat(clean);
     return isNaN(parsed) ? 0 : parsed;
@@ -54,21 +54,21 @@ export default function NovoFollowup() {
     const date = formData.get("data") as string;
     const time = formData.get("hora") as string;
 
-    // ValidaÃ§Ã£o
+    // Validação
     if (!name || name.length < 3) {
-      toast.error("Nome invÃ¡lido", { description: "Digite o nome completo do paciente." });
+      toast.error("Nome inválido", { description: "Digite o nome completo do paciente." });
       setIsSubmitting(false);
       return;
     }
 
     if (!validatePhone(phone)) {
-      toast.error("Telefone invÃ¡lido", { description: "Use o formato (11) 99999-9999." });
+      toast.error("Telefone inválido", { description: "Use o formato (11) 99999-9999." });
       setIsSubmitting(false);
       return;
     }
 
     if (!treatment || treatment.length < 3) {
-      toast.error("Tratamento invÃ¡lido", { description: "Descreva o tratamento de interesse." });
+      toast.error("Tratamento inválido", { description: "Descreva o tratamento de interesse." });
       setIsSubmitting(false);
       return;
     }
@@ -105,7 +105,7 @@ export default function NovoFollowup() {
         toast.success("Paciente cadastrado!", { description: json.warning });
       } else {
         toast.success("Paciente cadastrado com sucesso!", {
-          description: "O orÃ§amento foi registrado e o follow-up agendado."
+          description: "O orçamento foi registrado e o follow-up agendado."
         });
       }
       
@@ -148,7 +148,7 @@ export default function NovoFollowup() {
             
             <MotionDiv className="mb-10 relative z-10">
               <h2 className="text-2xl font-light tracking-tight text-foreground">Detalhes do Paciente</h2>
-              <p className="text-sm text-muted-foreground mt-2 font-light">Preencha as informaÃ§Ãµes do orÃ§amento para organizar o follow-up.</p>
+              <p className="text-sm text-muted-foreground mt-2 font-light">Preencha as informações do orçamento para organizar o follow-up.</p>
             </MotionDiv>
 
             <form className="grid gap-8 relative z-10" onSubmit={handleSubmit}>
@@ -160,7 +160,7 @@ export default function NovoFollowup() {
                     id="nome"
                     name="nome"
                     type="text" 
-                    placeholder="Ex: JoÃ£o da Silva" 
+                    placeholder="Ex: João da Silva" 
                     required
                     minLength={3}
                     className="h-12 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl"
@@ -196,12 +196,12 @@ export default function NovoFollowup() {
                 </div>
 
                 <div className="grid gap-3 sm:row-span-2">
-                  <Label htmlFor="endereco" className="text-sm font-medium text-foreground/80">EndereÃ§o (Opcional)</Label>
+                  <Label htmlFor="endereco" className="text-sm font-medium text-foreground/80">Endereço (Opcional)</Label>
                   <Textarea
                     id="endereco"
                     name="endereco"
                     autoComplete="street-address"
-                    placeholder="Rua, nÃºmero, complemento, bairro, cidade e CEP"
+                    placeholder="Rua, número, complemento, bairro, cidade e CEP"
                     className="min-h-28 bg-foreground/5 border-foreground/10 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl resize-none p-4"
                   />
                 </div>
@@ -217,7 +217,7 @@ export default function NovoFollowup() {
                   required
                   className="h-12 bg-foreground/5 border-foreground/10 text-foreground focus-visible:ring-primary/50 focus-visible:border-primary/50 rounded-xl [color-scheme:dark]"
                 />
-                <p className="text-xs text-muted-foreground">Informe o dia em que o paciente foi atendido. Esta data define se o orÃ§amento estÃ¡ quente ou frio.</p>
+                <p className="text-xs text-muted-foreground">Informe o dia em que o paciente foi atendido. Esta data define se o orçamento está quente ou frio.</p>
               </MotionDiv>
 
               <MotionDiv className="grid gap-6 sm:grid-cols-2">
@@ -235,7 +235,7 @@ export default function NovoFollowup() {
                 </div>
                 
                 <div className="grid gap-3">
-                  <Label htmlFor="valor" className="text-sm font-medium text-foreground/80">Valor do OrÃ§amento (R$)</Label>
+                  <Label htmlFor="valor" className="text-sm font-medium text-foreground/80">Valor do Orçamento (R$)</Label>
                   <Input 
                     id="valor"
                     name="valor"
@@ -268,7 +268,7 @@ export default function NovoFollowup() {
                   />
                 </div>
                 <div className="grid gap-3">
-                  <Label htmlFor="hora" className="text-sm font-medium text-foreground/80">HorÃ¡rio</Label>
+                  <Label htmlFor="hora" className="text-sm font-medium text-foreground/80">Horário</Label>
                   <Input 
                     id="hora"
                     name="hora"
@@ -305,4 +305,3 @@ export default function NovoFollowup() {
     </div>
   );
 }
-
