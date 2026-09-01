@@ -3,6 +3,10 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sanitizePhone } from "@/lib/format";
 import { isValidDateOnly } from "@/lib/budget";
 
+function sanitizeCpf(value: unknown): string {
+  return typeof value === "string" ? value.replace(/\D/g, "") : "";
+}
+
 /**
  * POST /api/patients
  * Cria um paciente + follow-up agendado.
@@ -14,6 +18,8 @@ export async function POST(req: Request) {
     const {
       name,
       phone: rawPhone,
+      cpf: rawCpf,
+      address,
       treatment,
       amount,
       message,
@@ -22,18 +28,26 @@ export async function POST(req: Request) {
       status,
     } = body;
     const phone = sanitizePhone(rawPhone);
+    const cpf = sanitizeCpf(rawCpf);
 
-    // Validação de entrada
+    // ValidaÃ§Ã£o de entrada
     if (!name || !phone || !treatment || !consultation_date) {
       return NextResponse.json(
-        { error: "Nome, telefone, tratamento e data do atendimento são obrigatórios" },
+        { error: "Nome, telefone, tratamento e data do atendimento sÃ£o obrigatÃ³rios" },
         { status: 400 }
       );
     }
 
     if (!isValidDateOnly(consultation_date)) {
       return NextResponse.json(
-        { error: "Data do atendimento inválida" },
+        { error: "Data do atendimento invÃ¡lida" },
+        { status: 400 }
+      );
+    }
+
+    if (cpf && cpf.length !== 11) {
+      return NextResponse.json(
+        { error: "CPF invÃ¡lido" },
         { status: 400 }
       );
     }
@@ -41,7 +55,12 @@ export async function POST(req: Request) {
     // 1. Insert patient
     const { data: patientData, error: patientError } = await supabaseAdmin
       .from("patients")
-      .insert([{ name, phone, treatment }])
+      .insert([{
+        name: name.trim(),
+        phone,
+        cpf: cpf || null,
+        address: typeof address === "string" ? address.trim() || null : null,
+      }])
       .select()
       .single();
 
@@ -66,7 +85,7 @@ export async function POST(req: Request) {
 
       if (fupError) {
         console.error("Erro ao criar followup:", fupError);
-        // Paciente foi criado, mas followup falhou — retorna sucesso parcial
+        // Paciente foi criado, mas followup falhou â€” retorna sucesso parcial
         return NextResponse.json({
           success: true,
           patient: patientData,
@@ -74,7 +93,7 @@ export async function POST(req: Request) {
         });
       }
     } else if (patientData) {
-      // Sem agendamento — cria followup sem mensagem agendada (status Fechado ou Pendente sem data)
+      // Sem agendamento â€” cria followup sem mensagem agendada (status Fechado ou Pendente sem data)
       const { error: fupError } = await supabaseAdmin
         .from("followups")
         .insert([{
@@ -97,9 +116,12 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, patient: patientData });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Erro em POST /api/patients:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro interno" },
+      { status: 500 }
+    );
   }
 }
 
@@ -114,6 +136,8 @@ export async function PUT(req: Request) {
       followup_id,
       patient_name,
       patient_phone: rawPatientPhone,
+      patient_cpf: rawPatientCpf,
+      patient_address,
       treatment,
       amount,
       message,
@@ -125,9 +149,17 @@ export async function PUT(req: Request) {
     const patient_phone = rawPatientPhone
       ? sanitizePhone(rawPatientPhone)
       : rawPatientPhone;
+    const patient_cpf = rawPatientCpf !== undefined
+      ? sanitizeCpf(rawPatientCpf)
+      : undefined;
 
     if (!followup_id) {
-      return NextResponse.json({ error: "followup_id é obrigatório" }, { status: 400 });
+      return NextResponse.json({ error: "followup_id Ã© obrigatÃ³rio" }, { status: 400 });
+    }
+
+
+    if (patient_cpf && patient_cpf.length !== 11) {
+      return NextResponse.json({ error: "CPF invÃ¡lido" }, { status: 400 });
     }
 
     // Buscar o followup para obter o patient_id
@@ -138,32 +170,39 @@ export async function PUT(req: Request) {
       .single();
 
     if (fupError || !fup) {
-      return NextResponse.json({ error: "Followup não encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Followup nÃ£o encontrado" }, { status: 404 });
     }
 
     // Atualizar paciente
-    const patientUpdate: Record<string, any> = {};
+    const patientUpdate: Record<string, unknown> = {};
     if (patient_name !== undefined) patientUpdate.name = patient_name;
     if (patient_phone !== undefined) patientUpdate.phone = patient_phone;
-    if (treatment !== undefined) patientUpdate.treatment = treatment;
+    if (patient_cpf !== undefined) patientUpdate.cpf = patient_cpf || null;
+    if (patient_address !== undefined) {
+      patientUpdate.address = typeof patient_address === "string"
+        ? patient_address.trim() || null
+        : null;
+    }
 
     if (Object.keys(patientUpdate).length > 0) {
       const { error: pErr } = await supabaseAdmin
         .from("patients")
         .update(patientUpdate)
         .eq("id", fup.patient_id);
-      if (pErr) console.error("Erro ao atualizar paciente:", pErr);
+      if (pErr) {
+        return NextResponse.json({ error: pErr.message }, { status: 500 });
+      }
     }
 
     // Atualizar followup
-    const fupUpdate: Record<string, any> = {};
+    const fupUpdate: Record<string, unknown> = {};
     if (treatment !== undefined) fupUpdate.treatment = treatment;
     if (amount !== undefined) fupUpdate.amount = parseFloat(amount) || 0;
     if (message !== undefined) fupUpdate.message = message;
     if (scheduled_at !== undefined) fupUpdate.scheduled_at = scheduled_at;
     if (consultation_date !== undefined) {
       if (!isValidDateOnly(consultation_date)) {
-        return NextResponse.json({ error: "Data do atendimento inválida" }, { status: 400 });
+        return NextResponse.json({ error: "Data do atendimento invÃ¡lida" }, { status: 400 });
       }
       fupUpdate.consultation_date = consultation_date;
     }
@@ -181,8 +220,12 @@ export async function PUT(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Erro em PUT /api/patients:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro interno" },
+      { status: 500 }
+    );
   }
 }
+

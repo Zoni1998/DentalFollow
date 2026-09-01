@@ -18,6 +18,7 @@ export async function GET(
       .from("followups")
       .select(`
         id,
+        patient_id,
         consultation_date,
         treatment,
         amount,
@@ -25,25 +26,45 @@ export async function GET(
         scheduled_at,
         status,
         lost_reason,
+        sent_at,
         created_at,
         updated_at,
         patients (
           id,
           name,
-          phone
+          phone,
+          cpf,
+          address
         )
       `)
       .eq("id", id)
       .single();
 
     if (error || !data) {
-      return NextResponse.json({ error: "Followup não encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Followup nÃ£o encontrado" }, { status: 404 });
     }
 
-    return NextResponse.json({ followup: data });
-  } catch (err: any) {
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from("followups")
+      .select("id, message, scheduled_at, sent_at, status, updated_at")
+      .eq("patient_id", data.patient_id)
+      .neq("message", "")
+      .order("scheduled_at", { ascending: false });
+
+    if (messagesError) {
+      console.error("Erro ao buscar histÃ³rico de mensagens:", messagesError);
+    }
+
+    return NextResponse.json({
+      followup: data,
+      messages: messages || [],
+    });
+  } catch (err: unknown) {
     console.error("Erro em GET /api/followups/[id]:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro interno" },
+      { status: 500 }
+    );
   }
 }
 
@@ -58,7 +79,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Primeiro busca o patient_id para deletar o paciente também
+    // Primeiro busca o patient_id para deletar o paciente tambÃ©m
     const { data: fup } = await supabaseAdmin
       .from("followups")
       .select("patient_id")
@@ -75,7 +96,7 @@ export async function DELETE(
       return NextResponse.json({ error: fupError.message }, { status: 500 });
     }
 
-    // Opcionalmente deleta o paciente para não deixar sujeira
+    // Opcionalmente deleta o paciente para nÃ£o deixar sujeira
     if (fup?.patient_id) {
       await supabaseAdmin
         .from("patients")
@@ -84,8 +105,12 @@ export async function DELETE(
     }
     
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Erro em DELETE /api/followups/[id]:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro interno" },
+      { status: 500 }
+    );
   }
 }
+

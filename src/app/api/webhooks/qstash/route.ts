@@ -4,14 +4,14 @@ import { sendWhatsAppMessage } from "@/lib/evolution";
 import crypto from "crypto";
 
 /**
- * Valida a assinatura do QStash para garantir que a requisição
- * é legítima e não um atacante externo.
+ * Valida a assinatura do QStash para garantir que a requisiÃ§Ã£o
+ * Ã© legÃ­tima e nÃ£o um atacante externo.
  *
  * QStash envia dois headers:
  *   - "Upstash-Signature: <v=1,t=TIMESTAMP,s=HMAC>"
  *   Pode estar no header "Authorization" ou "Upstash-Signature".
  *
- * O HMAC é SHA-256 do body assinado com a signing key.
+ * O HMAC Ã© SHA-256 do body assinado com a signing key.
  */
 function verifyQStashSignature(
   body: string,
@@ -22,7 +22,7 @@ function verifyQStashSignature(
 
   try {
     // QStash envia assinaturas no formato: "{v=1,t=...,s=...}"
-    // Mas o padrão mais novo envia formato JWT ou string simples.
+    // Mas o padrÃ£o mais novo envia formato JWT ou string simples.
     // Vamos suportar o formato "Upstash-Signature" tradicional.
     const parts = signature.split(",");
     let t = "";
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
   try {
     const bodyText = await req.text();
 
-    // 1. Validar segurança (QStash Signature ou CRON_SECRET)
+    // 1. Validar seguranÃ§a (QStash Signature ou CRON_SECRET)
     const signingKey = process.env.QSTASH_CURRENT_SIGNING_KEY || "";
     const cronSecret = process.env.CRON_SECRET || "";
     const signature = req.headers.get("Upstash-Signature") || "";
@@ -72,12 +72,12 @@ export async function POST(req: Request) {
       isAuthorized = true;
     } else if (!signingKey && !cronSecret) {
       // Modo Dev (sem chaves)
-      console.warn("Nenhuma chave de segurança configurada. Executando em modo aberto (Perigoso).");
+      console.warn("Nenhuma chave de seguranÃ§a configurada. Executando em modo aberto (Perigoso).");
       isAuthorized = true;
     }
 
     if (!isAuthorized) {
-      console.error("Tentativa não autorizada no Webhook");
+      console.error("Tentativa nÃ£o autorizada no Webhook");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -110,9 +110,38 @@ export async function POST(req: Request) {
 
     // 3. Envia as mensagens via Z-API
     for (const fup of followups) {
-      // Supabase Client v2 tipa join como array — acessamos manualmente
+      // Supabase Client v2 tipa join como array â€” acessamos manualmente
       const patients = fup.patients as unknown as { id: string; phone: string } | null;
       const patientPhone = patients?.phone;
+
+      // Reserva o follow-up antes de chamar a Evolution API. A atualizaÃ§Ã£o
+      // condicional funciona como um lock atÃ´mico: se dois webhooks processarem
+      // a mesma linha, somente um consegue trocar Pendente por Enviado.
+      const { data: claimedFollowup, error: claimError } = await supabaseAdmin
+        .from("followups")
+        .update({
+          status: "Enviado",
+          zapi_response: {
+            status: "processing",
+            claimed_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", fup.id)
+        .eq("status", "Pendente")
+        .select("id")
+        .maybeSingle();
+
+      if (claimError) {
+        console.error(`Erro ao reservar follow-up ${fup.id}:`, claimError);
+        results.push({ id: fup.id, status: "Erro", error: claimError.message });
+        continue;
+      }
+
+      if (!claimedFollowup) {
+        // Outra execuÃ§Ã£o jÃ¡ reservou ou enviou esta mensagem.
+        results.push({ id: fup.id, status: "Ignorado", reason: "JÃ¡ estÃ¡ em processamento" });
+        continue;
+      }
 
       if (!patientPhone) {
         await supabaseAdmin
@@ -126,19 +155,24 @@ export async function POST(req: Request) {
       const sendResult = await sendWhatsAppMessage(patientPhone, fup.message);
 
       if (sendResult.success) {
-        // 4. Atualiza o banco como Enviado
+        // 4. MantÃ©m Enviado e grava a resposta final da Evolution API
         await supabaseAdmin
           .from("followups")
-          .update({ status: "Enviado", zapi_response: sendResult })
-          .eq("id", fup.id);
+          .update({
+            zapi_response: sendResult,
+            sent_at: new Date().toISOString(),
+          })
+          .eq("id", fup.id)
+          .eq("status", "Enviado");
 
         results.push({ id: fup.id, status: "Enviado" });
       } else {
-        // Salva erro mas mantém como Pendente para retry
+        // Libera a reserva para uma tentativa futura em caso de erro.
         await supabaseAdmin
           .from("followups")
-          .update({ zapi_response: sendResult })
-          .eq("id", fup.id);
+          .update({ status: "Pendente", zapi_response: sendResult, sent_at: null })
+          .eq("id", fup.id)
+          .eq("status", "Enviado");
 
         results.push({ id: fup.id, status: "Erro", error: sendResult.error });
       }
@@ -149,8 +183,12 @@ export async function POST(req: Request) {
       results
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Internal Error na Rota de QStash:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro interno" },
+      { status: 500 }
+    );
   }
 }
+
